@@ -3,6 +3,16 @@ import tkinter.messagebox as messagebox
 import traceback
 import sys
 import os
+import logging
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    filename='habermas_machine.log',
+    filemode='w'
+)
+logger = logging.getLogger('habermas_machine')
 
 # Try importing customtkinter with error handling
 try:
@@ -29,6 +39,7 @@ try:
     import re
     from collections import defaultdict
     import math
+    import datetime
 except ImportError as e:
     # Show message box for other missing dependencies
     root = tk.Tk()
@@ -43,7 +54,7 @@ except ImportError as e:
 class HabermasMachine:
     def __init__(self, root):
         self.root = root
-        self.root.title("Habermas Machine - Ollama Group Statement Synthesizer")
+        self.root.title("Habermas Machine - AI-Assisted Consensus Builder")
         self.root.geometry("1800x900")
         
         # Configure dark theme
@@ -56,7 +67,7 @@ class HabermasMachine:
         self.participant_statements = []
         self.candidate_statements = []
         self.election_results = {}
-        self.recursive_group_frames = {}
+        self.session_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         
         # Default prompt templates
         self.default_templates = {
@@ -65,12 +76,12 @@ class HabermasMachine:
                                   "---\n\n{participant_statements}\n\n---\n\n"
                                   "Generate a thoughtful and nuanced group statement that represents a fair synthesis of these perspectives. Focus on finding common ground, acknowledge areas of disagreement or lack of information, and present a position that most participants could accept.",
             
-            "ranking_prediction": "Given a participant's statement on a question, predict how they would rank different group statements from most preferred (1) to least preferred ({num_candidates}).\n\n"
+            "ranking_prediction": "Given a participant's statement on a question, predict how they would rank different group statements from most preferred (1) to least preferred ({num_candidates}).\n\n\n\n"
                                 "Question: {question}\n\n"
-                                "---\n\nParticipant {participant_num}'s original statement: {participant_statement}\n\n---\n\n"
+                                "Participant {participant_num}'s original statement: {participant_statement}\n\n"
                                 "Group Statements to Rank:\n\n"
-                                "---\n\n{candidate_statements}\n---\n\n"
-                                "Based on the participant's original statement, predict their ranking of these group statements from most preferred to least preferred as a JSON object containing `\"ranking\": []`.\n\nThe ranking should reflect which statements best align with the participant's expressed viewpoint, values, and concerns."
+                                "{candidate_statements}\n\n\n\n"
+                                """Based on the participant's original statement, predict their ranking of these group statements from most preferred to least preferred as a JSON object:\n\n{{\n  "ranking": []\n}}\n\nThe ranking should reflect which statements best align with the participant's expressed viewpoint, values, and concerns."""
         }
         
         # Create templates that will be edited
@@ -87,6 +98,7 @@ class HabermasMachine:
         self.ranking_temperature_var.set("0.2")
         self.max_retries_var.set("3")  # Default for retries
         self.max_group_size_var.set("9")  # Default max group size
+        self.num_candidates_var.set("4")  # Default number of candidates
         self.question_text.insert("1.0", "Should voting be compulsory?")
         
         # Set prompt templates in the UI
@@ -119,7 +131,7 @@ class HabermasMachine:
     def create_layout(self):
         # Configure grid layout with 3 columns
         self.root.grid_columnconfigure(0, weight=1)  # Left: Settings & Inputs
-        self.root.grid_columnconfigure(1, weight=1)  # Middle: Results
+        self.root.grid_columnconfigure(1, weight=2)  # Middle: Results - giving more space
         self.root.grid_columnconfigure(2, weight=1)  # Right: Debug
         self.root.grid_rowconfigure(0, weight=1)
         
@@ -166,20 +178,20 @@ class HabermasMachine:
         inputs_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
         # The debate question
-        ctk.CTkLabel(inputs_frame, text="Question:", anchor="w").pack(fill="x", padx=10, pady=(10, 5))
-        self.question_text = ctk.CTkTextbox(inputs_frame, height=40)
+        ctk.CTkLabel(inputs_frame, text="Question:", anchor="w", font=("Arial", 12, "bold")).pack(fill="x", padx=10, pady=(10, 5))
+        self.question_text = ctk.CTkTextbox(inputs_frame, height=60, font=("Arial", 12))
         self.question_text.pack(fill="x", padx=10, pady=(0, 5))
         
         # Participant statements
         participants_header = ctk.CTkFrame(inputs_frame)
         participants_header.pack(fill="x", padx=10, pady=(10, 5))
         
-        ctk.CTkLabel(participants_header, text="Participant Statements (one per line):", anchor="w").pack(side="left", fill="x", padx=5)
+        ctk.CTkLabel(participants_header, text="Participant Statements (one per line):", anchor="w", font=("Arial", 12, "bold")).pack(side="left", fill="x", padx=5)
         self.participant_count_label = ctk.CTkLabel(participants_header, text="Count: 0", width=100)
         self.participant_count_label.pack(side="right", padx=5)
         
         # Create a single textbox for all participant statements
-        self.participants_text = ctk.CTkTextbox(inputs_frame, height=300, wrap="word")
+        self.participants_text = ctk.CTkTextbox(inputs_frame, height=300, wrap="word", font=("Arial", 12))
         self.participants_text.pack(fill="both", expand=True, padx=10, pady=5)
         
         # Add text changed callback to update participant count
@@ -191,25 +203,19 @@ class HabermasMachine:
         
         self.generate_btn = ctk.CTkButton(
             self.buttons_frame,
-            text="Generate Candidate Statements",
-            command=self.start_generation
+            text="Generate Consensus (Single Run)",
+            command=self.start_generation,
+            font=("Arial", 12)
         )
         self.generate_btn.pack(side="left", padx=10, pady=10)
-        
-        self.simulate_election_btn = ctk.CTkButton(
-            self.buttons_frame,
-            text="Simulate Election",
-            command=self.simulate_election,
-            state="disabled"
-        )
-        self.simulate_election_btn.pack(side="left", padx=10, pady=10)
         
         # Button for recursive generation
         self.recursive_generate_btn = ctk.CTkButton(
             self.buttons_frame,
-            text="Recursive Habermas",
+            text="Recursive Consensus Builder",
             command=self.start_recursive_generation,
-            fg_color="#1f5d3c"  # Dark green to distinguish it
+            fg_color="#1f5d3c",  # Dark green
+            font=("Arial", 12)
         )
         self.recursive_generate_btn.pack(side="left", padx=10, pady=10)
         
@@ -218,7 +224,8 @@ class HabermasMachine:
             self.buttons_frame,
             text="Bulk Import",
             command=self.bulk_import,
-            fg_color="#3d7e9a"  # Blue color to distinguish it
+            fg_color="#3d7e9a",  # Blue color
+            font=("Arial", 12)
         )
         bulk_import_btn.pack(side="left", padx=10, pady=10)
         
@@ -226,7 +233,8 @@ class HabermasMachine:
             self.buttons_frame,
             text="Stop",
             command=self.stop_generation,
-            fg_color="darkred"
+            fg_color="darkred",
+            font=("Arial", 12)
         )
         self.stop_btn.pack(side="right", padx=10, pady=10)
     
@@ -239,82 +247,82 @@ class HabermasMachine:
         model_frame = ctk.CTkFrame(settings_frame)
         model_frame.pack(fill="x", pady=5)
         
-        ctk.CTkLabel(model_frame, text="Model:", anchor="w").pack(side="left", padx=10)
+        ctk.CTkLabel(model_frame, text="Model:", anchor="w", font=("Arial", 12, "bold")).pack(side="left", padx=10)
         self.model_var = ctk.StringVar()
-        self.model_entry = ctk.CTkEntry(model_frame, textvariable=self.model_var, width=200)
+        self.model_entry = ctk.CTkEntry(model_frame, textvariable=self.model_var, width=200, font=("Arial", 12))
         self.model_entry.pack(side="left", padx=10, fill="x", expand=True)
         
         # Generation parameters section
         gen_params_frame = ctk.CTkFrame(settings_frame)
         gen_params_frame.pack(fill="x", pady=10, padx=5)
         
-        ctk.CTkLabel(gen_params_frame, text="Generation Parameters", font=("Arial", 12, "bold")).pack(pady=5)
+        ctk.CTkLabel(gen_params_frame, text="Generation Parameters", font=("Arial", 14, "bold")).pack(pady=5)
         
         params_grid = ctk.CTkFrame(gen_params_frame)
         params_grid.pack(fill="x", padx=10, pady=5, expand=True)
         
         # Temperature
-        ctk.CTkLabel(params_grid, text="Temperature:").grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        ctk.CTkLabel(params_grid, text="Temperature:", font=("Arial", 12)).grid(row=0, column=0, padx=10, pady=5, sticky="w")
         self.temperature_var = ctk.StringVar()
-        self.temperature_entry = ctk.CTkEntry(params_grid, textvariable=self.temperature_var, width=60)
+        self.temperature_entry = ctk.CTkEntry(params_grid, textvariable=self.temperature_var, width=60, font=("Arial", 12))
         self.temperature_entry.grid(row=0, column=1, padx=10, pady=5, sticky="w")
         
         # Top P
-        ctk.CTkLabel(params_grid, text="Top P:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        ctk.CTkLabel(params_grid, text="Top P:", font=("Arial", 12)).grid(row=1, column=0, padx=10, pady=5, sticky="w")
         self.top_p_var = ctk.StringVar()
-        self.top_p_entry = ctk.CTkEntry(params_grid, textvariable=self.top_p_var, width=60)
+        self.top_p_entry = ctk.CTkEntry(params_grid, textvariable=self.top_p_var, width=60, font=("Arial", 12))
         self.top_p_entry.grid(row=1, column=1, padx=10, pady=5, sticky="w")
         
         # Top K
-        ctk.CTkLabel(params_grid, text="Top K:").grid(row=2, column=0, padx=10, pady=5, sticky="w")
+        ctk.CTkLabel(params_grid, text="Top K:", font=("Arial", 12)).grid(row=2, column=0, padx=10, pady=5, sticky="w")
         self.top_k_var = ctk.StringVar()
-        self.top_k_entry = ctk.CTkEntry(params_grid, textvariable=self.top_k_var, width=60)
+        self.top_k_entry = ctk.CTkEntry(params_grid, textvariable=self.top_k_var, width=60, font=("Arial", 12))
         self.top_k_entry.grid(row=2, column=1, padx=10, pady=5, sticky="w")
         
         # Number of candidate statements
-        ctk.CTkLabel(params_grid, text="Candidate Statements:").grid(row=0, column=2, padx=10, pady=5, sticky="w")
+        ctk.CTkLabel(params_grid, text="Candidate Statements:", font=("Arial", 12)).grid(row=0, column=2, padx=10, pady=5, sticky="w")
         self.num_candidates_var = ctk.StringVar()
-        self.num_candidates_spinbox = ctk.CTkEntry(params_grid, textvariable=self.num_candidates_var, width=50)
+        self.num_candidates_spinbox = ctk.CTkEntry(params_grid, textvariable=self.num_candidates_var, width=60, font=("Arial", 12))
         self.num_candidates_spinbox.grid(row=0, column=3, padx=10, pady=5, sticky="w")
         
         # Ranking prediction parameters section
         rank_params_frame = ctk.CTkFrame(settings_frame)
         rank_params_frame.pack(fill="x", pady=10, padx=5)
         
-        ctk.CTkLabel(rank_params_frame, text="Ranking Prediction Parameters", font=("Arial", 12, "bold")).pack(pady=5)
+        ctk.CTkLabel(rank_params_frame, text="Ranking Prediction Parameters", font=("Arial", 14, "bold")).pack(pady=5)
         
         rank_grid = ctk.CTkFrame(rank_params_frame)
         rank_grid.pack(fill="x", padx=10, pady=5, expand=True)
         
         # Ranking temperature
-        ctk.CTkLabel(rank_grid, text="Temperature:").grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        ctk.CTkLabel(rank_grid, text="Temperature:", font=("Arial", 12)).grid(row=0, column=0, padx=10, pady=5, sticky="w")
         self.ranking_temperature_var = ctk.StringVar()
-        self.ranking_temperature_entry = ctk.CTkEntry(rank_grid, textvariable=self.ranking_temperature_var, width=60)
+        self.ranking_temperature_entry = ctk.CTkEntry(rank_grid, textvariable=self.ranking_temperature_var, width=60, font=("Arial", 12))
         self.ranking_temperature_entry.grid(row=0, column=1, padx=10, pady=5, sticky="w")
         
         # Maximum retries for JSON parsing
-        ctk.CTkLabel(rank_grid, text="Max JSON Retries:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        ctk.CTkLabel(rank_grid, text="Max JSON Retries:", font=("Arial", 12)).grid(row=1, column=0, padx=10, pady=5, sticky="w")
         self.max_retries_var = ctk.StringVar()
-        self.max_retries_entry = ctk.CTkEntry(rank_grid, textvariable=self.max_retries_var, width=60)
+        self.max_retries_entry = ctk.CTkEntry(rank_grid, textvariable=self.max_retries_var, width=60, font=("Arial", 12))
         self.max_retries_entry.grid(row=1, column=1, padx=10, pady=5, sticky="w")
         
-        # NEW: Recursive Habermas settings
+        # Recursive Habermas settings
         recursive_frame = ctk.CTkFrame(settings_frame)
         recursive_frame.pack(fill="x", pady=10, padx=5)
         
-        ctk.CTkLabel(recursive_frame, text="Recursive Habermas Settings", font=("Arial", 12, "bold")).pack(pady=5)
+        ctk.CTkLabel(recursive_frame, text="Recursive Consensus Settings", font=("Arial", 14, "bold")).pack(pady=5)
         
         recursive_grid = ctk.CTkFrame(recursive_frame)
         recursive_grid.pack(fill="x", padx=10, pady=5, expand=True)
         
         # Max group size
-        ctk.CTkLabel(recursive_grid, text="Max Group Size:").grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        ctk.CTkLabel(recursive_grid, text="Max Group Size:", font=("Arial", 12)).grid(row=0, column=0, padx=10, pady=5, sticky="w")
         self.max_group_size_var = ctk.StringVar()
-        self.max_group_size_entry = ctk.CTkEntry(recursive_grid, textvariable=self.max_group_size_var, width=60)
+        self.max_group_size_entry = ctk.CTkEntry(recursive_grid, textvariable=self.max_group_size_var, width=60, font=("Arial", 12))
         self.max_group_size_entry.grid(row=0, column=1, padx=10, pady=5, sticky="w")
         
         # Voting strategy
-        ctk.CTkLabel(recursive_grid, text="Voting Strategy:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        ctk.CTkLabel(recursive_grid, text="Voting Strategy:", font=("Arial", 12)).grid(row=1, column=0, padx=10, pady=5, sticky="w")
         self.voting_strategy_var = ctk.StringVar(value="own_groups_only")
         
         strategy_frame = ctk.CTkFrame(recursive_grid)
@@ -324,7 +332,8 @@ class HabermasMachine:
             strategy_frame, 
             text="Own groups only", 
             variable=self.voting_strategy_var, 
-            value="own_groups_only"
+            value="own_groups_only",
+            font=("Arial", 12)
         )
         own_groups_radio.pack(anchor="w", pady=2)
         
@@ -332,15 +341,35 @@ class HabermasMachine:
             strategy_frame, 
             text="All participants vote in all elections", 
             variable=self.voting_strategy_var, 
-            value="all_elections"
+            value="all_elections",
+            font=("Arial", 12)
         )
         all_elections_radio.pack(anchor="w", pady=2)
+        
+        # Output options
+        output_frame = ctk.CTkFrame(settings_frame)
+        output_frame.pack(fill="x", pady=10, padx=5)
+        
+        ctk.CTkLabel(output_frame, text="Output Options", font=("Arial", 14, "bold")).pack(pady=5)
+        
+        output_options = ctk.CTkFrame(output_frame)
+        output_options.pack(fill="x", padx=10, pady=5)
+        
+        # Save output option
+        self.save_output_var = ctk.BooleanVar(value=True)
+        save_output_check = ctk.CTkCheckBox(
+            output_options, 
+            text="Save results to file", 
+            variable=self.save_output_var,
+            font=("Arial", 12)
+        )
+        save_output_check.pack(anchor="w", pady=5)
         
         # Template reset buttons section
         reset_frame = ctk.CTkFrame(settings_frame)
         reset_frame.pack(fill="x", pady=10, padx=5)
         
-        ctk.CTkLabel(reset_frame, text="Reset Templates", font=("Arial", 12, "bold")).pack(pady=5)
+        ctk.CTkLabel(reset_frame, text="Reset Templates", font=("Arial", 14, "bold")).pack(pady=5)
         
         reset_buttons = ctk.CTkFrame(reset_frame)
         reset_buttons.pack(fill="x", padx=10, pady=5)
@@ -348,21 +377,24 @@ class HabermasMachine:
         reset_candidate_btn = ctk.CTkButton(
             reset_buttons,
             text="Reset Candidate Template",
-            command=lambda: self.reset_template("candidate_generation")
+            command=lambda: self.reset_template("candidate_generation"),
+            font=("Arial", 12)
         )
         reset_candidate_btn.pack(side="left", padx=10, pady=5)
         
         reset_ranking_btn = ctk.CTkButton(
             reset_buttons,
             text="Reset Ranking Template",
-            command=lambda: self.reset_template("ranking_prediction")
+            command=lambda: self.reset_template("ranking_prediction"),
+            font=("Arial", 12)
         )
         reset_ranking_btn.pack(side="left", padx=10, pady=5)
         
         reset_all_btn = ctk.CTkButton(
             reset_buttons,
             text="Reset All Templates",
-            command=self.reset_all_templates
+            command=self.reset_all_templates,
+            font=("Arial", 12)
         )
         reset_all_btn.pack(side="left", padx=10, pady=5)
     
@@ -373,14 +405,14 @@ class HabermasMachine:
         
         # Candidate generation template
         ctk.CTkLabel(templates_frame, text="Candidate Generation Template:", anchor="w", font=("Arial", 12, "bold")).pack(fill="x", padx=10, pady=(10, 5))
-        self.candidate_template_text = ctk.CTkTextbox(templates_frame, height=200, wrap="word")
+        self.candidate_template_text = ctk.CTkTextbox(templates_frame, height=200, wrap="word", font=("Arial", 12))
         self.candidate_template_text.pack(fill="x", padx=10, pady=(0, 10))
         
         ctk.CTkLabel(templates_frame, text="Available placeholders: {question}, {participant_statements}", anchor="w").pack(fill="x", padx=10, pady=(0, 10))
         
         # Ranking prediction template
         ctk.CTkLabel(templates_frame, text="Ranking Prediction Template:", anchor="w", font=("Arial", 12, "bold")).pack(fill="x", padx=10, pady=(10, 5))
-        self.ranking_template_text = ctk.CTkTextbox(templates_frame, height=200, wrap="word")
+        self.ranking_template_text = ctk.CTkTextbox(templates_frame, height=200, wrap="word", font=("Arial", 12))
         self.ranking_template_text.pack(fill="x", padx=10, pady=(0, 10))
         
         ctk.CTkLabel(templates_frame, text="Available placeholders: {question}, {participant_num}, {participant_statement}, {num_candidates}, {candidate_statements}", anchor="w").pack(fill="x", padx=10, pady=(0, 10))
@@ -389,103 +421,120 @@ class HabermasMachine:
         save_btn = ctk.CTkButton(
             templates_frame,
             text="Save Template Changes",
-            command=self.save_templates
+            command=self.save_templates,
+            font=("Arial", 12)
         )
         save_btn.pack(padx=10, pady=10)
     
     def setup_middle_column(self):
-        # Create a notebook for different result tabs
+        # For the middle column (results), we'll use a tabview to separate different views
         self.results_tabview = ctk.CTkTabview(self.middle_column)
         self.results_tabview.pack(fill="both", expand=True, padx=5, pady=5)
         
-        # Add tabs
-        self.results_tabview.add("Candidate Statements")
-        self.results_tabview.add("Election Results")
-        self.results_tabview.add("Recursive Results")  # NEW: Tab for recursive results
+        # Add tabs for different types of output
+        self.results_tabview.add("Friendly Output")
+        self.results_tabview.add("Detailed Records")
         
-        # Candidate statements tab
-        self.candidates_frame = ctk.CTkScrollableFrame(self.results_tabview.tab("Candidate Statements"))
-        self.candidates_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        # Setup the Friendly Output tab
+        self.setup_friendly_output_tab()
         
-        # Set up candidate statement displays
-        self.candidate_displays = []
-        max_candidates = 10  # Maximum number of candidates we'll support
+        # Setup the Detailed Records tab
+        self.setup_detailed_records_tab()
+    
+    def setup_friendly_output_tab(self):
+        # Create a frame for the friendly output tab
+        friendly_frame = ctk.CTkFrame(self.results_tabview.tab("Friendly Output"))
+        friendly_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
-        for i in range(max_candidates):
-            candidate_frame = ctk.CTkFrame(self.candidates_frame)
-            
-            header_frame = ctk.CTkFrame(candidate_frame)
-            header_frame.pack(fill="x", padx=5, pady=5)
-            
-            label = ctk.CTkLabel(header_frame, text=f"Candidate Statement {i+1}", anchor="w", font=("Arial", 14, "bold"))
-            label.pack(side="left", padx=5, pady=5)
-            
-            vote_label = ctk.CTkLabel(header_frame, text="", anchor="e")
-            vote_label.pack(side="right", padx=5, pady=5)
-            
-            candidate_text = ctk.CTkTextbox(candidate_frame, height=150, wrap="word")
-            candidate_text.pack(fill="both", expand=True, padx=5, pady=5)
-            
-            self.candidate_displays.append((candidate_frame, label, vote_label, candidate_text))
-            # We'll pack the frames only when we have content
+        # Make sure the frame will expand properly
+        friendly_frame.grid_columnconfigure(0, weight=1)
+        friendly_frame.grid_rowconfigure(1, weight=1)
         
-        # Election results tab - make sure it's fully expandable
-        self.results_frame = ctk.CTkScrollableFrame(self.results_tabview.tab("Election Results"))
-        self.results_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        # Header with status
+        header_frame = ctk.CTkFrame(friendly_frame)
+        header_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
         
-        # Configure the results frame to give more space to the winner frame
-        self.results_frame.columnconfigure(0, weight=1)
+        ctk.CTkLabel(header_frame, text="Consensus Builder Results", font=("Arial", 16, "bold")).pack(side="left", padx=10, pady=5)
         
-        self.winner_frame = ctk.CTkFrame(self.results_frame)
-        self.winner_frame.pack(fill="x", pady=10, padx=5)
+        self.friendly_status_var = ctk.StringVar(value="Ready")
+        status_label = ctk.CTkLabel(header_frame, textvariable=self.friendly_status_var, font=("Arial", 12))
+        status_label.pack(side="right", padx=10, pady=5)
         
-        ctk.CTkLabel(self.winner_frame, text="Winning Statement", font=("Arial", 16, "bold")).pack(pady=5)
+        # Create the friendly output textbox
+        self.friendly_output = ctk.CTkTextbox(friendly_frame, wrap="word", font=("Arial", 12))
+        self.friendly_output.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
         
-        self.winner_text = ctk.CTkTextbox(self.winner_frame, height=300, wrap="word")
-        self.winner_text.pack(fill="both", expand=True, padx=10, pady=10)
+        # Add a save button for the output
+        self.save_friendly_btn = ctk.CTkButton(
+            friendly_frame,
+            text="Save Results",
+            command=lambda: self.save_output("friendly"),
+            font=("Arial", 12)
+        )
+        self.save_friendly_btn.grid(row=2, column=0, sticky="e", padx=10, pady=10)
+    
+    def setup_detailed_records_tab(self):
+        # Create a frame for the detailed records tab
+        detailed_frame = ctk.CTkFrame(self.results_tabview.tab("Detailed Records"))
+        detailed_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
-        self.ranking_frame = ctk.CTkFrame(self.results_frame)
-        self.ranking_frame.pack(fill="x", pady=10, padx=5)
+        # Make sure the frame will expand properly
+        detailed_frame.grid_columnconfigure(0, weight=1)
+        detailed_frame.grid_rowconfigure(1, weight=1)
         
-        ctk.CTkLabel(self.ranking_frame, text="Simulated Election Results", font=("Arial", 14, "bold")).pack(pady=5)
+        # Header with info
+        header_frame = ctk.CTkFrame(detailed_frame)
+        header_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
         
-        self.ranking_text = ctk.CTkTextbox(self.ranking_frame, height=300, wrap="word")
-        self.ranking_text.pack(fill="both", expand=True, padx=10, pady=10)
+        ctk.CTkLabel(header_frame, text="Complete Process Record", font=("Arial", 16, "bold")).pack(side="left", padx=10, pady=5)
         
-        # NEW: Recursive results tab
-        self.recursive_results_frame = ctk.CTkScrollableFrame(self.results_tabview.tab("Recursive Results"))
-        self.recursive_results_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        self.detailed_status_var = ctk.StringVar(value="Ready")
+        status_label = ctk.CTkLabel(header_frame, textvariable=self.detailed_status_var, font=("Arial", 12))
+        status_label.pack(side="right", padx=10, pady=5)
+        
+        # Create the detailed records textbox
+        self.detailed_output = ctk.CTkTextbox(detailed_frame, wrap="word", font=("Arial", 12))
+        self.detailed_output.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+        
+        # Add a save button for the detailed records
+        self.save_detailed_btn = ctk.CTkButton(
+            detailed_frame,
+            text="Save Detailed Record",
+            command=lambda: self.save_output("detailed"),
+            font=("Arial", 12)
+        )
+        self.save_detailed_btn.grid(row=2, column=0, sticky="e", padx=10, pady=10)
     
     def setup_right_column(self):
-        # Create debug frames with more space
+        # Debug frames with more space
         self.right_column.grid_rowconfigure(0, weight=1)
         self.right_column.grid_rowconfigure(1, weight=1)
         self.right_column.grid_columnconfigure(0, weight=1)
         
-        # Debug prompt panel - ensure it expands to fill available space
+        # Debug prompt panel
         prompt_frame = ctk.CTkFrame(self.right_column)
         prompt_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-        prompt_frame.pack_propagate(False)  # Prevent the frame from shrinking to fit its contents
+        prompt_frame.pack_propagate(False)
         
         prompt_frame.grid_rowconfigure(1, weight=1)
         prompt_frame.grid_columnconfigure(0, weight=1)
         
         ctk.CTkLabel(prompt_frame, text="Current Prompt", font=("Arial", 14, "bold")).grid(row=0, column=0, padx=10, pady=5, sticky="w")
         
-        self.prompt_text = ctk.CTkTextbox(prompt_frame, wrap="word")
+        self.prompt_text = ctk.CTkTextbox(prompt_frame, wrap="word", font=("Arial", 12))
         self.prompt_text.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
         
-        # Debug response panel - ensure it expands to fill available space
+        # Debug response panel
         response_frame = ctk.CTkFrame(self.right_column)
         response_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
-        response_frame.pack_propagate(False)  # Prevent the frame from shrinking to fit its contents
+        response_frame.pack_propagate(False)
         
         response_frame.grid_rowconfigure(1, weight=1)
         response_frame.grid_columnconfigure(0, weight=1)
         
         ctk.CTkLabel(response_frame, text="Current Response", font=("Arial", 14, "bold")).grid(row=0, column=0, padx=10, pady=5, sticky="w")
         
-        self.response_text = ctk.CTkTextbox(response_frame, wrap="word")
+        self.response_text = ctk.CTkTextbox(response_frame, wrap="word", font=("Arial", 12))
         self.response_text.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
     
     def update_participant_count(self, event=None):
@@ -493,59 +542,6 @@ class HabermasMachine:
         text = self.participants_text.get("1.0", "end-1c")
         lines = [line.strip() for line in text.split('\n') if line.strip()]
         self.participant_count_label.configure(text=f"Count: {len(lines)}")
-    
-    # REMOVED - Replaced with a method where all particpant statements share a single textboxt, for easier copy-paste and better performance.
-    # def update_participant_panels(self):
-        # try:
-            # new_num_participants = max(2, min(50, int(self.num_participants_var.get())))
-            # self.num_participants_var.set(str(new_num_participants))
-        # except ValueError:
-            # new_num_participants = 5
-            # self.num_participants_var.set("5")
-        
-        # # Store existing participant statements
-        # old_entries = []
-        # for entry in self.participant_entry_fields:
-            # if entry.winfo_exists():
-                # old_entries.append(entry.get("1.0", "end-1c"))
-            # else:
-                # old_entries.append("")
-        
-        # # Make sure our persistent storage has enough slots
-        # # Extend the stored statements list if needed
-        # while len(self.stored_participant_statements) < len(old_entries):
-            # self.stored_participant_statements.append("")
-        
-        # # Update our persistent storage with any UI changes
-        # for i, entry_text in enumerate(old_entries):
-            # if i < len(self.stored_participant_statements):
-                # self.stored_participant_statements[i] = entry_text
-        
-        # # Clear existing participant frames
-        # for widget in self.participants_container.winfo_children():
-            # widget.destroy()
-        
-        # # Reset the list of entry fields
-        # self.participant_entry_fields = []
-        
-        # # Create new participant frames based on the new count
-        # for i in range(new_num_participants):
-            # participant_frame = ctk.CTkFrame(self.participants_container)
-            # participant_frame.pack(fill="x", pady=5)
-            
-            # # Create label with participant number
-            # ctk.CTkLabel(participant_frame, text=f"Participant {i+1}:", anchor="w", width=100).pack(side="top", anchor="w", padx=5, pady=2)
-            
-            # # Create text entry for participant opinion
-            # participant_entry = ctk.CTkTextbox(participant_frame, height=80, wrap="word")
-            # participant_entry.pack(fill="x", padx=5, pady=2)
-            
-            # # Add to list of entry fields
-            # self.participant_entry_fields.append(participant_entry)
-            
-            # # Restore previous text if available
-            # if i < len(self.stored_participant_statements) and self.stored_participant_statements[i]:
-                # participant_entry.insert("1.0", self.stored_participant_statements[i])
     
     def save_templates(self):
         # Get the current template text
@@ -636,7 +632,39 @@ class HabermasMachine:
         statements = [line.strip() for line in text.split('\n') if line.strip()]
         return statements
     
+    def save_output(self, output_type):
+        """Save the output to a file"""
+        # Default file types and initial filename
+        if output_type == "friendly":
+            filetypes = [("Text files", "*.txt"), ("Markdown files", "*.md"), ("All files", "*.*")]
+            initial_filename = f"habermas_results_{self.session_id}.md"
+            content = self.friendly_output.get("1.0", "end-1c")
+        else:  # detailed
+            filetypes = [("Markdown files", "*.md"), ("Text files", "*.txt"), ("All files", "*.*")]
+            initial_filename = f"habermas_detailed_{self.session_id}.md"
+            content = self.detailed_output.get("1.0", "end-1c")
+        
+        # Ask user where to save
+        file_path = ctk.filedialog.asksaveasfilename(
+            defaultextension=".md",
+            filetypes=filetypes,
+            initialfile=initial_filename
+        )
+        
+        if not file_path:
+            return  # User canceled
+        
+        try:
+            with open(file_path, 'w', encoding='utf-8') as file:
+                file.write(content)
+            
+            messagebox.showinfo("Save Successful", f"Results successfully saved to {file_path}")
+        except Exception as e:
+            messagebox.showerror("Save Error", f"Error saving file: {str(e)}")
+            logger.error(f"Error saving file: {str(e)}")
+    
     def start_generation(self):
+        """Start the single-run consensus generation process"""
         self.stop_event.clear()
         
         # Collect participant statements
@@ -646,43 +674,136 @@ class HabermasMachine:
             messagebox.showerror("Error", "Please provide at least 2 participant statements.")
             return
         
-        # Clear previous candidate statements
-        self.candidate_statements = []
-        for frame, _, _, text in self.candidate_displays:
-            if frame.winfo_ismapped():
-                frame.pack_forget()
-            text.delete("1.0", "end")
+        # Clear previous outputs
+        self.friendly_output.delete("1.0", "end")
+        self.detailed_output.delete("1.0", "end")
+        
+        # Set status
+        self.friendly_status_var.set("Generating...")
+        self.detailed_status_var.set("Generating...")
+        
+        # Generate a unique session ID
+        self.session_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         
         # Disable buttons during generation
         self.generate_btn.configure(state="disabled")
         self.recursive_generate_btn.configure(state="disabled")
-        self.simulate_election_btn.configure(state="disabled")
         
         # Start generation thread
-        Thread(target=self.generate_candidate_statements, daemon=True).start()
+        Thread(target=self.run_single_consensus, daemon=True).start()
     
-    def stop_generation(self):
-        self.stop_event.set()
-        if self.current_response:
-            try:
-                self.current_response.close()
-            except:
-                pass
+    def run_single_consensus(self):
+        """Run a single consensus generation process"""
+        try:
+            question = self.question_text.get("1.0", "end-1c").strip()
+            
+            # Initial log entries
+            self.log_to_friendly(f"# Consensus Builder Results\n\n")
+            self.log_to_friendly(f"**Question:** {question}\n\n")
+            self.log_to_friendly("## Original Participant Statements\n\n")
+            
+            # Log detailed records header
+            self.log_to_detailed(f"# Consensus Process Detailed Record\n\n")
+            self.log_to_detailed(f"**Session ID:** {self.session_id}  \n")
+            self.log_to_detailed(f"**Time:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  \n")
+            self.log_to_detailed(f"**Model:** {self.model_var.get()}  \n")
+            self.log_to_detailed(f"**Process Type:** Single-run Consensus  \n\n")
+            self.log_to_detailed(f"## Question\n\n{question}\n\n")
+            self.log_to_detailed("## Original Participant Statements\n\n")
+            
+            # Log participant statements
+            for i, statement in enumerate(self.participant_statements):
+                self.log_to_friendly(f"**Participant {i+1}:**  \n{statement}\n\n")
+                self.log_to_detailed(f"**Participant {i+1}:**  \n{statement}\n\n")
+            
+            # Generate candidate statements
+            self.log_to_friendly("## Generating Candidate Statements...\n\n")
+            self.log_to_detailed("## Candidate Statement Generation\n\n")
+            
+            # Generate candidates
+            self.candidate_statements = self.generate_candidate_statements(question)
+            
+            if self.stop_event.is_set():
+                self.cleanup_after_process()
+                return
+            
+            if not self.candidate_statements:
+                self.log_to_friendly("**Error:** Failed to generate candidate statements.\n\n")
+                self.log_to_detailed("**Error:** Failed to generate candidate statements.\n\n")
+                self.cleanup_after_process()
+                return
+            
+            # Display the candidates
+            self.log_to_friendly("### Candidate Statements\n\n")
+            self.log_to_detailed("### Generated Candidate Statements\n\n")
+            
+            for i, candidate in enumerate(self.candidate_statements):
+                self.log_to_friendly(f"**Candidate {i+1}:**  \n{candidate}\n\n")
+                self.log_to_detailed(f"**Candidate {i+1}:**  \n{candidate}\n\n")
+            
+            # Run election simulation
+            self.log_to_friendly("## Simulating Election...\n\n")
+            self.log_to_detailed("## Election Simulation\n\n")
+            
+            # Do election simulation
+            winner_idx, rankings, pairwise_matrix, strongest_paths = self.run_election_simulation(question)
+            
+            if self.stop_event.is_set() or winner_idx is None:
+                self.cleanup_after_process()
+                return
+            
+            # Get winning statement
+            winning_statement = self.candidate_statements[winner_idx]
+            
+            # Display the winning statement at the top for visibility
+            self.root.after(0, lambda: self.update_friendly_output_with_winner(winning_statement))
+            
+            # Log the election results
+            self.log_election_results(winner_idx, rankings, pairwise_matrix, strongest_paths)
+            
+            # Auto save if enabled
+            if self.save_output_var.get():
+                try:
+                    # Save friendly output
+                    friendly_path = f"habermas_results_{self.session_id}.md"
+                    with open(friendly_path, 'w', encoding='utf-8') as file:
+                        file.write(self.friendly_output.get("1.0", "end-1c"))
+                    
+                    # Save detailed output
+                    detailed_path = f"habermas_detailed_{self.session_id}.md"
+                    with open(detailed_path, 'w', encoding='utf-8') as file:
+                        file.write(self.detailed_output.get("1.0", "end-1c"))
+                    
+                    self.log_to_friendly(f"\n\n*Results automatically saved to {friendly_path}*\n")
+                    self.log_to_detailed(f"\n\n*Detailed record automatically saved to {detailed_path}*\n")
+                except Exception as e:
+                    self.log_to_friendly(f"\n\n*Failed to auto-save results: {str(e)}*\n")
+                    logger.error(f"Auto-save error: {str(e)}")
+            
+            # Set status to complete
+            self.root.after(0, lambda: self.friendly_status_var.set("Complete"))
+            self.root.after(0, lambda: self.detailed_status_var.set("Complete"))
+            
+        except Exception as e:
+            error_msg = f"Error in consensus process: {str(e)}"
+            self.log_to_friendly(f"\n\n**Error:** {error_msg}\n")
+            self.log_to_detailed(f"\n\n**Error:** {error_msg}\n\nStacktrace:\n```\n{traceback.format_exc()}\n```\n")
+            logger.error(error_msg, exc_info=True)
         
-        self.generate_btn.configure(state="normal")
-        self.recursive_generate_btn.configure(state="normal")
-        if len(self.candidate_statements) > 1:
-            self.simulate_election_btn.configure(state="normal")
+        finally:
+            self.cleanup_after_process()
     
-    def generate_candidate_statements(self):
+    def generate_candidate_statements(self, question):
+        """Generate candidate consensus statements"""
         try:
             num_candidates = min(10, max(2, int(self.num_candidates_var.get())))
         except ValueError:
             num_candidates = 4
-            self.root.after(0, lambda: self.num_candidates_var.set("4"))
+            self.num_candidates_var.set("4")
         
-        question = self.question_text.get("1.0", "end-1c").strip()
+        self.log_to_detailed(f"Generating {num_candidates} candidate statements\n\n")
         
+        candidates = []
         for i in range(num_candidates):
             if self.stop_event.is_set():
                 break
@@ -691,29 +812,19 @@ class HabermasMachine:
             shuffled_statements = self.participant_statements.copy()
             random.shuffle(shuffled_statements)
             
+            self.log_to_detailed(f"### Generating Candidate {i+1}\n\n")
+            
             # Generate the candidate statement
             candidate = self.generate_single_candidate(question, shuffled_statements, i+1)
             
             if candidate and not self.stop_event.is_set():
-                self.candidate_statements.append(candidate)
-                
-                # Display the candidate
-                frame, label, vote_label, text_widget = self.candidate_displays[i]
-                frame.pack(fill="x", pady=10, padx=5, expand=True)
-                text_widget.delete("1.0", "end")
-                text_widget.insert("1.0", candidate)
-                
-                # Switch to the candidates tab
-                self.results_tabview.set("Candidate Statements")
+                candidates.append(candidate)
+                self.log_to_friendly(f"Candidate {i+1} generated...\n")
         
-        # Re-enable buttons after generation
-        if not self.stop_event.is_set():
-            self.root.after(0, lambda: self.generate_btn.configure(state="normal"))
-            self.root.after(0, lambda: self.recursive_generate_btn.configure(state="normal"))
-            if len(self.candidate_statements) > 1:
-                self.root.after(0, lambda: self.simulate_election_btn.configure(state="normal"))
+        return candidates
     
     def generate_single_candidate(self, question, statements, candidate_num):
+        """Generate a single candidate statement"""
         # Prepare participant statements text
         participant_statements_text = ""
         for i, statement in enumerate(statements):
@@ -725,6 +836,9 @@ class HabermasMachine:
             question=question,
             participant_statements=participant_statements_text
         )
+        
+        # Log the prompt to detailed output
+        self.log_to_detailed(f"**Prompt for Candidate {candidate_num}:**\n\n```\n{prompt}\n```\n\n")
         
         # Update the debug prompt display
         self.root.after(0, lambda: self.update_debug_prompt(prompt))
@@ -758,7 +872,9 @@ class HabermasMachine:
             )
             
             if self.current_response.status_code != 200:
-                self.root.after(0, lambda: messagebox.showerror("API Error", f"Error: Status code {self.current_response.status_code}"))
+                error_msg = f"API Error: Status code {self.current_response.status_code}"
+                self.log_to_detailed(f"**Error:** {error_msg}\n\n")
+                logger.error(error_msg)
                 return None
             
             full_response = ""
@@ -777,34 +893,26 @@ class HabermasMachine:
                             # Update the debug response display
                             self.root.after(0, lambda r=full_response: self.update_debug_response(r))
                     except json.JSONDecodeError:
-                        self.root.after(0, lambda: messagebox.showerror("Error", "Failed to decode response from Ollama API"))
+                        self.log_to_detailed("**Error:** Failed to decode response from Ollama API\n\n")
                 
+            # Log the response
+            self.log_to_detailed(f"**Raw Response for Candidate {candidate_num}:**\n\n```\n{full_response}\n```\n\n")
+            
             # Remove the <think>...</think> tag that DeepSeek-R1 may add
             clean_response = re.sub(r'<think>.*?</think>', '', full_response, flags=re.DOTALL).strip()
             
             return clean_response
             
         except Exception as e:
-            self.root.after(0, lambda: messagebox.showerror("Error", f"Exception: {str(e)}"))
+            error_msg = f"Error generating candidate {candidate_num}: {str(e)}"
+            self.log_to_detailed(f"**Error:** {error_msg}\n\n")
+            logger.error(error_msg, exc_info=True)
             return None
         finally:
             self.current_response = None
     
-    def simulate_election(self):
-        if len(self.candidate_statements) < 2:
-            messagebox.showerror("Error", "Need at least 2 candidate statements to simulate an election.")
-            return
-        
-        self.stop_event.clear()
-        self.simulate_election_btn.configure(state="disabled")
-        self.generate_btn.configure(state="disabled")
-        self.recursive_generate_btn.configure(state="disabled")
-        
-        # Start simulation thread
-        Thread(target=self.run_election_simulation, daemon=True).start()
-    
-    def run_election_simulation(self):
-        question = self.question_text.get("1.0", "end-1c").strip()
+    def run_election_simulation(self, question):
+        """Simulate an election between candidate statements"""
         num_participants = len(self.participant_statements)
         
         # Initialize simulated rankings
@@ -813,9 +921,16 @@ class HabermasMachine:
         # Log for JSON ranking attempts
         ranking_attempts_log = []
         
+        self.log_to_detailed("### Predicting Participant Rankings\n\n")
+        
         # For each participant, predict their rankings
         for p_idx in range(num_participants):
+            if self.stop_event.is_set():
+                return None, None, None, None
+                
             participant_statement = self.participant_statements[p_idx]
+            
+            self.log_to_detailed(f"**Predicting ranking for Participant {p_idx+1}**\n\n")
             
             # Predict ranking for this participant with JSON format
             predicted_ranking, attempts_log = self.predict_participant_ranking_json(
@@ -829,31 +944,185 @@ class HabermasMachine:
             
             if predicted_ranking:
                 rankings[p_idx] = predicted_ranking
+                
+                # Log the predicted ranking
+                self.log_to_detailed(f"**Predicted ranking:** {[r+1 for r in predicted_ranking]}\n\n")
         
         if self.stop_event.is_set():
-            self.generate_btn.configure(state="normal")
-            self.recursive_generate_btn.configure(state="normal")
-            self.simulate_election_btn.configure(state="normal")
-            return
+            return None, None, None, None
         
         # Calculate winner using the Schulze method
+        self.log_to_detailed("### Calculating Winner using Schulze Method\n\n")
+        
         winner_idx, pairwise_matrix, strongest_paths = self.schulze_method(rankings, len(self.candidate_statements))
-        winner_statement = self.candidate_statements[winner_idx]
         
-        # Generate information about pairwise votes for display
-        pairwise_counts = {}
-        for i in range(len(self.candidate_statements)):
-            for j in range(len(self.candidate_statements)):
-                if i != j:
-                    pairwise_counts[(i, j)] = pairwise_matrix[i][j]
+        # Log the result
+        self.log_to_detailed(f"**Winner calculated:** Candidate {winner_idx+1}\n\n")
         
-        # Update the UI with results
-        self.root.after(0, lambda: self.show_election_results(rankings, winner_idx, pairwise_counts, pairwise_matrix, strongest_paths, ranking_attempts_log))
+        return winner_idx, rankings, pairwise_matrix, strongest_paths
+    
+    def predict_participant_ranking_json(self, question, participant_statement, candidate_statements, participant_num):
+        """Predict a participant's ranking with JSON format output and retries"""
+        # Get max retries from settings
+        try:
+            max_retries = int(self.max_retries_var.get())
+        except ValueError:
+            max_retries = 3
         
-        # Re-enable buttons
-        self.root.after(0, lambda: self.generate_btn.configure(state="normal"))
-        self.root.after(0, lambda: self.recursive_generate_btn.configure(state="normal"))
-        self.root.after(0, lambda: self.simulate_election_btn.configure(state="normal"))
+        # Create a system prompt for JSON output
+        system_prompt = self.create_ranking_system_prompt(len(candidate_statements))
+        
+        # Prepare candidate statements text
+        candidate_statements_text = ""
+        for i, statement in enumerate(candidate_statements):
+            candidate_statements_text += f"Statement {i+1}:\n{statement}\n\n"
+        
+        # Get the template and format it
+        template = self.prompt_templates["ranking_prediction"] 
+        prompt = template.format(
+            question=question,
+            participant_num=participant_num,
+            participant_statement=participant_statement,
+            num_candidates=len(candidate_statements),
+            candidate_statements=candidate_statements_text
+        )
+        
+        # Log the prompt to detailed output
+        self.log_to_detailed(f"**System Prompt:**\n\n```\n{system_prompt}\n```\n\n")
+        self.log_to_detailed(f"**User Prompt:**\n\n```\n{prompt}\n```\n\n")
+        
+        # Update the debug prompt display
+        self.root.after(0, lambda: self.update_debug_prompt(f"System prompt:\n{system_prompt}\n\n---\n\nUser prompt:\n{prompt}"))
+        
+        # Prepare API call parameters
+        model = self.model_var.get()
+        try:
+            temperature = float(self.ranking_temperature_var.get())
+        except ValueError:
+            temperature = 0.2  # Lower temperature for more deterministic ranking prediction
+        
+        # Keep track of retry attempts
+        attempts = 0
+        attempts_log = []
+        
+        while attempts < max_retries:
+            attempts += 1
+            
+            # Make the API call with system prompt
+            try:
+                self.current_response = requests.post(
+                    "http://localhost:11434/api/generate",
+                    json={
+                        "model": model,
+                        "prompt": prompt,
+                        "system": system_prompt,  # Add system prompt here
+                        "stream": True,
+                        "options": {
+                            "temperature": temperature
+                        }
+                    },
+                    stream=True
+                )
+                
+                if self.current_response.status_code != 200:
+                    attempt_error = f"Attempt {attempts}: API Error: Status code {self.current_response.status_code}"
+                    attempts_log.append(attempt_error)
+                    self.log_to_detailed(f"**{attempt_error}**\n\n")
+                    continue
+                
+                full_response = ""
+                for line in self.current_response.iter_lines():
+                    if self.stop_event.is_set():
+                        break
+                        
+                    if line:
+                        try:
+                            data = json.loads(line)
+                            if 'response' in data:
+                                response_text = data['response']
+                                full_response += response_text
+                                
+                                # Update the debug response display
+                                self.root.after(0, lambda r=full_response: self.update_debug_response(r))
+                        except json.JSONDecodeError:
+                            pass
+                
+                # Log this attempt
+                attempts_log.append(f"Attempt {attempts}: Response received, parsing...")
+                self.log_to_detailed(f"**Attempt {attempts} response:**\n\n```\n{full_response}\n```\n\n")
+                
+                # Try to extract JSON from the response
+                try:
+                    # Remove the <think>...</think> tag that DeepSeek-R1 may add
+                    clean_response = re.sub(r'<think>.*?</think>', '', full_response, flags=re.DOTALL).strip()
+                    
+                    # Try to find a JSON object within the text
+                    match = re.search(r'({[\s\S]*?})', clean_response)
+                    if match:
+                        json_str = match.group(1)
+                        ranking_data = json.loads(json_str)
+                        
+                        if "ranking" in ranking_data and isinstance(ranking_data["ranking"], list):
+                            # Convert 1-indexed to 0-indexed
+                            ranking = [num - 1 for num in ranking_data["ranking"]]
+                            
+                            # Validate ranking has correct indices
+                            valid_indices = set(range(len(candidate_statements)))
+                            if set(ranking) == valid_indices and len(ranking) == len(candidate_statements):
+                                attempts_log.append(f"Attempt {attempts}: Success! Valid JSON ranking found.")
+                                self.log_to_detailed(f"**Ranking parsed successfully:** {[r+1 for r in ranking]}\n\n")
+                                return ranking, attempts_log
+                            else:
+                                attempts_log.append(f"Attempt {attempts}: Invalid ranking indices: {ranking}")
+                                self.log_to_detailed(f"**Invalid ranking indices:** {ranking}\n\n")
+                        else:
+                            attempts_log.append(f"Attempt {attempts}: JSON missing 'ranking' field or not a list")
+                            self.log_to_detailed("**JSON missing 'ranking' field or not a list**\n\n")
+                    else:
+                        attempts_log.append(f"Attempt {attempts}: No JSON object found in response")
+                        self.log_to_detailed("**No JSON object found in response**\n\n")
+                
+                except json.JSONDecodeError as e:
+                    attempts_log.append(f"Attempt {attempts}: JSON parsing error: {str(e)}")
+                    self.log_to_detailed(f"**JSON parsing error:** {str(e)}\n\n")
+                except Exception as e:
+                    attempts_log.append(f"Attempt {attempts}: Error processing response: {str(e)}")
+                    self.log_to_detailed(f"**Error processing response:** {str(e)}\n\n")
+                
+            except Exception as e:
+                attempts_log.append(f"Attempt {attempts}: Exception: {str(e)}")
+                self.log_to_detailed(f"**Exception:** {str(e)}\n\n")
+            finally:
+                self.current_response = None
+        
+        # If we get here, all attempts failed
+        attempts_log.append("All attempts failed. Falling back to random ranking.")
+        self.log_to_detailed("**All attempts failed. Falling back to random ranking.**\n\n")
+        
+        # Fallback to a random ranking
+        random_ranking = list(range(len(candidate_statements)))
+        random.shuffle(random_ranking)
+        return random_ranking, attempts_log
+    
+    def create_ranking_system_prompt(self, num_candidates):
+        """Create a system prompt that instructs the model to output JSON ranking"""
+        # Generate a simple non-biasing example with a different number of candidates
+        example_size = max(3, num_candidates - 1)  # Use a different number to avoid bias
+        example_ranking = list(range(1, example_size + 1))
+        random.shuffle(example_ranking)  # Randomize to avoid bias
+        
+        system_prompt = (
+            "You are a ranking prediction assistant that outputs results in JSON format. "
+            "Your task is to predict how a participant would rank statements based on their perspective.\n\n"
+            f"Your response MUST be a valid JSON object with a 'ranking' field containing an array of integers representing "
+            f"statement numbers (1 to {num_candidates}), ordered from most preferred to least preferred.\n\n"
+            "Example JSON format (do not copy these example values):\n"
+            "{\n"
+            f"  \"ranking\": {example_ranking}\n"
+            "}\n\n"
+            "Your entire response should ONLY contain the JSON object, with no additional text before or after."
+        )
+        return system_prompt
     
     def schulze_method(self, rankings, num_candidates):
         """
@@ -918,267 +1187,119 @@ class HabermasMachine:
         
         return winner_idx, pairwise_matrix, strongest_paths
     
-    def create_ranking_system_prompt(self, num_candidates):
-        """Create a system prompt that instructs the model to output JSON ranking"""
-        # Generate a simple non-biasing example with a different number of candidates
-        example_size = max(3, num_candidates - 1)  # Use a different number to avoid bias
-        example_ranking = list(range(1, example_size + 1))
-        random.shuffle(example_ranking)  # Randomize to avoid bias
-        
-        system_prompt = (
-            "You are a ranking prediction assistant that outputs results in JSON format. "
-            "Your task is to predict how a participant would rank statements based on their perspective.\n\n"
-            f"Your response MUST be a valid JSON object with a 'ranking' field containing an array of integers representing "
-            f"statement numbers (1 to {num_candidates}), ordered from most preferred to least preferred.\n\n"
-            "Example JSON format (do not copy these example values):\n"
-            "{\n"
-            f"  \"ranking\": {example_ranking}\n"
-            "}\n\n"
-            "Your entire response should ONLY contain the JSON object, with no additional text before or after."
-        )
-        return system_prompt
-    
-    def predict_participant_ranking_json(self, question, participant_statement, candidate_statements, participant_num):
-        """Predict a participant's ranking with JSON format output and retries"""
-        # Get max retries from settings
-        try:
-            max_retries = int(self.max_retries_var.get())
-        except ValueError:
-            max_retries = 3
-        
-        # Create a system prompt for JSON output
-        system_prompt = self.create_ranking_system_prompt(len(candidate_statements))
-        
-        # Prepare candidate statements text
-        candidate_statements_text = ""
-        for i, statement in enumerate(candidate_statements):
-            candidate_statements_text += f"Statement {i+1}:\n{statement}\n\n"
-        
-        # Get the template and format it
-        template = self.prompt_templates["ranking_prediction"] 
-        prompt = template.format(
-            question=question,
-            participant_num=participant_num,
-            participant_statement=participant_statement,
-            num_candidates=len(candidate_statements),
-            candidate_statements=candidate_statements_text
+    def log_election_results(self, winner_idx, rankings, pairwise_matrix, strongest_paths):
+        """Log the results of the election simulation"""
+        # Log winner to friendly output
+        self.log_to_friendly("## Election Results\n\n")
+        self.log_to_friendly(f"The winning statement was **Candidate {winner_idx+1}**\n\n")
+        self.log_to_friendly("### How the Winner Was Determined\n\n")
+        self.log_to_friendly(
+            "The consensus was determined using the Schulze method, a well-established voting system that "
+            "compares how each participant would rank the different statements. This method ensures that "
+            "the winning statement is one that is broadly acceptable to all participants, even if it wasn't "
+            "everyone's first choice.\n\n"
         )
         
-        # Update the debug prompt display
-        self.root.after(0, lambda: self.update_debug_prompt(f"System prompt:\n{system_prompt}\n\n---\n\nUser prompt:\n{prompt}"))
-        
-        # Prepare API call parameters
-        model = self.model_var.get()
-        try:
-            temperature = float(self.ranking_temperature_var.get())
-        except ValueError:
-            temperature = 0.2  # Lower temperature for more deterministic ranking prediction
-        
-        # Keep track of retry attempts
-        attempts = 0
-        attempts_log = []
-        
-        while attempts < max_retries:
-            attempts += 1
-            
-            # Make the API call with system prompt
-            try:
-                self.current_response = requests.post(
-                    "http://localhost:11434/api/generate",
-                    json={
-                        "model": model,
-                        "prompt": prompt,
-                        "system": system_prompt,  # Add system prompt here
-                        "stream": True,
-                        "options": {
-                            "temperature": temperature
-                        }
-                    },
-                    stream=True
-                )
-                
-                if self.current_response.status_code != 200:
-                    attempt_error = f"Attempt {attempts}: API Error: Status code {self.current_response.status_code}"
-                    attempts_log.append(attempt_error)
-                    continue
-                
-                full_response = ""
-                for line in self.current_response.iter_lines():
-                    if self.stop_event.is_set():
-                        break
-                        
-                    if line:
-                        try:
-                            data = json.loads(line)
-                            if 'response' in data:
-                                response_text = data['response']
-                                full_response += response_text
-                                
-                                # Update the debug response display
-                                self.root.after(0, lambda r=full_response: self.update_debug_response(r))
-                        except json.JSONDecodeError:
-                            pass
-                
-                # Log this attempt
-                attempts_log.append(f"Attempt {attempts}: Response received, parsing...")
-                
-                # Try to extract JSON from the response
-                try:
-                    # Remove the <think>...</think> tag that DeepSeek-R1 may add
-                    clean_response = re.sub(r'<think>.*?</think>', '', full_response, flags=re.DOTALL).strip()
-                    
-                    # Try to find a JSON object within the text
-                    match = re.search(r'({[\s\S]*?})', clean_response)
-                    if match:
-                        json_str = match.group(1)
-                        ranking_data = json.loads(json_str)
-                        
-                        if "ranking" in ranking_data and isinstance(ranking_data["ranking"], list):
-                            # Convert 1-indexed to 0-indexed
-                            ranking = [num - 1 for num in ranking_data["ranking"]]
-                            
-                            # Validate ranking has correct indices
-                            valid_indices = set(range(len(candidate_statements)))
-                            if set(ranking) == valid_indices and len(ranking) == len(candidate_statements):
-                                attempts_log.append(f"Attempt {attempts}: Success! Valid JSON ranking found.")
-                                return ranking, attempts_log
-                            else:
-                                attempts_log.append(f"Attempt {attempts}: Invalid ranking indices: {ranking}")
-                        else:
-                            attempts_log.append(f"Attempt {attempts}: JSON missing 'ranking' field or not a list")
-                    else:
-                        attempts_log.append(f"Attempt {attempts}: No JSON object found in response")
-                
-                except json.JSONDecodeError as e:
-                    attempts_log.append(f"Attempt {attempts}: JSON parsing error: {str(e)}")
-                except Exception as e:
-                    attempts_log.append(f"Attempt {attempts}: Error processing response: {str(e)}")
-                
-            except Exception as e:
-                attempts_log.append(f"Attempt {attempts}: Exception: {str(e)}")
-            finally:
-                self.current_response = None
-        
-        # If we get here, all attempts failed
-        attempts_log.append("All attempts failed. Falling back to random ranking.")
-        
-        # Fallback to a random ranking
-        random_ranking = list(range(len(candidate_statements)))
-        random.shuffle(random_ranking)
-        return random_ranking, attempts_log
-    
-    def show_election_results(self, rankings, winner_idx, pairwise_counts, pairwise_matrix, strongest_paths, ranking_attempts_log):
-        # Display the winner
-        self.winner_text.delete("1.0", "end")
-        self.winner_text.insert("1.0", self.candidate_statements[winner_idx])
-        
-        # Display vote counts on candidate statements
-        for i, (frame, _, vote_label, _) in enumerate(self.candidate_displays):
-            if i < len(self.candidate_statements):
-                # Calculate "strength" which is how many other candidates this one defeats in a pairwise comparison
-                victories = sum(1 for j in range(len(self.candidate_statements)) if i != j and strongest_paths[i][j] > strongest_paths[j][i])
-                vote_label.configure(text=f"Schulze Score: {victories}")
-                
-                # Highlight the winner
-                if i == winner_idx:
-                    frame.configure(fg_color="#1f5d3c")  # dark green for winner
-                else:
-                    frame.configure(fg_color="transparent")  # Use 'transparent' instead of None
-        
-        # Display detailed election results
-        self.ranking_text.delete("1.0", "end")
-        election_report = "=== SIMULATED ELECTION RESULTS (SCHULZE METHOD) ===\n\n"
-        
-        # Add election summary
-        total_participants = len(rankings)
-        election_report += f"Total participants: {total_participants}\n"
-        election_report += f"Winning statement: Statement {winner_idx + 1}\n\n"
-        
-        # Add Schulze method explanation
-        election_report += "=== SCHULZE METHOD RESULTS ===\n"
-        election_report += "The Schulze method compares each pair of statements to see which one is preferred by more participants.\n"
-        election_report += "For each pair of statements, a 'path strength' is calculated, representing how strongly one\n"
-        election_report += "statement is preferred over another considering all possible transitive preferences.\n\n"
-        
-        # Add information about strongest paths
-        election_report += "Statement rankings based on Schulze method:\n"
-        
-        # Count how many other statements each statement defeats
+        # Calculate victories for each candidate
         victories = defaultdict(int)
         for i in range(len(self.candidate_statements)):
             for j in range(len(self.candidate_statements)):
                 if i != j and strongest_paths[i][j] > strongest_paths[j][i]:
                     victories[i] += 1
         
-        # Display statements sorted by Schulze ranking
+        # Display statements sorted by Schulze ranking for friendly output
         sorted_statements = sorted(range(len(self.candidate_statements)), 
                                   key=lambda x: victories[x], 
                                   reverse=True)
         
+        self.log_to_friendly("### Final Ranking\n\n")
+        
+        for rank, stmt_idx in enumerate(sorted_statements, 1):
+            marker = "🏆 **WINNER**" if stmt_idx == winner_idx else ""
+            self.log_to_friendly(f"**Rank {rank}:** Candidate {stmt_idx+1} (defeats {victories[stmt_idx]} other statements) {marker}\n\n")
+        
+        # For the detailed output, include comprehensive results
+        self.log_to_detailed("### Election Results\n\n")
+        self.log_to_detailed(f"**Winning statement:** Candidate {winner_idx + 1}\n\n")
+        
+        # Add Schulze method explanation
+        self.log_to_detailed("#### Schulze Method Results\n\n")
+        self.log_to_detailed(
+            "The Schulze method compares each pair of statements to see which one is preferred by more participants. "
+            "For each pair of statements, a 'path strength' is calculated, representing how strongly one "
+            "statement is preferred over another considering all possible transitive preferences.\n\n"
+        )
+        
+        # Add information about statement rankings
+        self.log_to_detailed("**Statement rankings based on Schulze method:**\n\n")
+        
         for rank, stmt_idx in enumerate(sorted_statements, 1):
             marker = "[WINNER]" if stmt_idx == winner_idx else ""
-            election_report += f"Rank {rank}: Statement {stmt_idx + 1} (defeats {victories[stmt_idx]} other statements) {marker}\n"
+            self.log_to_detailed(f"Rank {rank}: Statement {stmt_idx + 1} (defeats {victories[stmt_idx]} other statements) {marker}\n")
         
-        election_report += "\n=== PAIRWISE PREFERENCE MATRIX ===\n"
-        election_report += "This matrix shows how many participants preferred statement in row over statement in column:\n\n"
+        self.log_to_detailed("\n#### Pairwise Preference Matrix\n\n")
+        self.log_to_detailed("This matrix shows how many participants preferred statement in row over statement in column:\n\n")
         
-        # Header row
-        election_report += "       |"
+        # Header row for preference matrix
+        pref_matrix = "|       |"
         for i in range(len(self.candidate_statements)):
-            election_report += f" S{i+1:2d} |"
-        election_report += "\n"
+            pref_matrix += f" S{i+1:2d} |"
+        pref_matrix += "\n|-------|"
+        pref_matrix += "-------|" * len(self.candidate_statements)
+        pref_matrix += "\n"
         
-        # Separator
-        election_report += "-------+" + "-----+" * len(self.candidate_statements) + "\n"
-        
-        # Data rows
+        # Data rows for preference matrix
         for i in range(len(self.candidate_statements)):
-            election_report += f" S{i+1:2d}  |"
+            pref_matrix += f"| S{i+1:2d}  |"
             for j in range(len(self.candidate_statements)):
                 if i == j:
-                    election_report += "  -  |"
+                    pref_matrix += "  -  |"
                 else:
-                    election_report += f" {pairwise_matrix[i][j]:2d}  |"
-            election_report += "\n"
+                    pref_matrix += f" {pairwise_matrix[i][j]:2d}  |"
+            pref_matrix += "\n"
         
-        election_report += "\n=== STRONGEST PATHS MATRIX ===\n"
-        election_report += "This matrix shows the strength of the strongest 'path' from row statement to column statement:\n\n"
+        self.log_to_detailed(pref_matrix + "\n")
         
-        # Header row
-        election_report += "       |"
+        # Strongest paths matrix
+        self.log_to_detailed("#### Strongest Paths Matrix\n\n")
+        self.log_to_detailed("This matrix shows the strength of the strongest 'path' from row statement to column statement:\n\n")
+        
+        # Header row for strongest paths
+        paths_matrix = "|       |"
         for i in range(len(self.candidate_statements)):
-            election_report += f" S{i+1:2d} |"
-        election_report += "\n"
+            paths_matrix += f" S{i+1:2d} |"
+        paths_matrix += "\n|-------|"
+        paths_matrix += "-------|" * len(self.candidate_statements)
+        paths_matrix += "\n"
         
-        # Separator
-        election_report += "-------+" + "-----+" * len(self.candidate_statements) + "\n"
-        
-        # Data rows
+        # Data rows for strongest paths
         for i in range(len(self.candidate_statements)):
-            election_report += f" S{i+1:2d}  |"
+            paths_matrix += f"| S{i+1:2d}  |"
             for j in range(len(self.candidate_statements)):
                 if i == j:
-                    election_report += "  -  |"
+                    paths_matrix += "  -  |"
                 else:
-                    election_report += f" {strongest_paths[i][j]:2d}  |"
-            election_report += "\n"
+                    paths_matrix += f" {strongest_paths[i][j]:2d}  |"
+            paths_matrix += "\n"
         
-        election_report += "\n=== INDIVIDUAL PARTICIPANT RANKINGS ===\n" 
-        election_report += "(Lower number = higher preference)\n\n"
+        self.log_to_detailed(paths_matrix + "\n")
+        
+        # Participant rankings table
+        self.log_to_detailed("#### Individual Participant Rankings\n\n")
+        self.log_to_detailed("(Lower number = higher preference)\n\n")
         
         # Create a table-like format for participant rankings
-        header = "Participant |"
+        rankings_table = "| Participant |"
         for i in range(len(self.candidate_statements)):
-            header += f" Stmt {i+1} |"
-        election_report += header + "\n"
-        
-        separator = "-" * len(header) + "\n"
-        election_report += separator
+            rankings_table += f" Stmt {i+1} |"
+        rankings_table += "\n|------------|"
+        rankings_table += "--------|" * len(self.candidate_statements)
+        rankings_table += "\n"
         
         # Add each participant's ranking
         for p_idx in sorted(rankings.keys()):
             p_ranking = rankings[p_idx]
-            row = f"    P{p_idx + 1}     |"
+            row = f"|     P{p_idx + 1}     |"
             
             # Create ranking display
             for stmt_idx in range(len(self.candidate_statements)):
@@ -1188,75 +1309,27 @@ class HabermasMachine:
                 else:
                     row += "   -   |"
             
-            election_report += row + "\n"
+            rankings_table += row + "\n"
         
-        election_report += separator + "\n"
-        
-        # Add JSON ranking attempts log
-        election_report += "=== JSON RANKING ATTEMPTS LOG ===\n\n"
-        for p_idx, attempts in enumerate(ranking_attempts_log):
-            election_report += f"Participant {p_idx + 1}:\n"
-            for attempt in attempts:
-                election_report += f"  • {attempt}\n"
-            election_report += "\n"
+        self.log_to_detailed(rankings_table + "\n")
         
         # Add methodology explanation
-        election_report += "=== ELECTION METHODOLOGY ===\n"
-        election_report += "The election was simulated using the Schulze method, which is a Condorcet voting system.\n"
-        election_report += "This method compares each pair of candidates and finds paths of preference between them.\n"
-        election_report += "The Schulze method has the following properties:\n"
-        election_report += " • Independence of clones (similar candidates don't split votes)\n"
-        election_report += " • Condorcet winner criterion (if a candidate beats all others in pairwise comparisons, they win)\n"
-        election_report += " • Robustness to strategic voting\n\n"
-        
-        election_report += "Each participant's ranking was predicted by the\n"
-        election_report += f"'{self.model_var.get()}' model based on their initial statements.\n"
-        election_report += "Rankings were extracted from JSON-formatted responses.\n"
-        
-        self.ranking_text.insert("1.0", election_report)
-        
-        # Switch to the results tab
-        self.results_tabview.set("Election Results")
-        
-        # Return the winning statement for use in recursive functions
-        return self.candidate_statements[winner_idx]
-
-    def update_debug_response(self, response):
-        # Keep track of whether we should auto-scroll
-        # Get the current position of the scroll
-        current_position = self.response_text.yview()
-        # Check if we were already at the bottom before the update
-        at_bottom = (current_position[1] >= 0.99)
-        
-        # Update the text
-        self.response_text.delete("1.0", "end")
-        self.response_text.insert("1.0", response)
-        
-        # If we were at the bottom, scroll back to the bottom after the update
-        if at_bottom:
-            self.response_text.see("end")
-            # Make sure we're really at the bottom
-            self.response_text.yview_moveto(1.0)
-
-    # Apply the same fix to the prompt text display
-    def update_debug_prompt(self, prompt):
-        # Keep track of whether we should auto-scroll
-        current_position = self.prompt_text.yview()
-        at_bottom = (current_position[1] >= 0.99)
-        
-        # Update the text
-        self.prompt_text.delete("1.0", "end")
-        self.prompt_text.insert("1.0", prompt)
-        
-        # If we were at the bottom, scroll back to the bottom after the update
-        if at_bottom:
-            self.prompt_text.see("end")
-            self.prompt_text.yview_moveto(1.0)
+        self.log_to_detailed("#### Election Methodology\n\n")
+        self.log_to_detailed(
+            "The election was simulated using the Schulze method, which is a Condorcet voting system. "
+            "This method compares each pair of candidates and finds paths of preference between them.\n\n"
             
-    # RECURSIVE HABERMAS MACHINE METHODS
+            "The Schulze method has the following properties:\n"
+            "* Independence of clones (similar candidates don't split votes)\n"
+            "* Condorcet winner criterion (if a candidate beats all others in pairwise comparisons, they win)\n"
+            "* Robustness to strategic voting\n\n"
+            
+            f"Each participant's ranking was predicted by the '{self.model_var.get()}' model based on their initial statements. "
+            "Rankings were extracted from JSON-formatted responses.\n"
+        )
     
     def start_recursive_generation(self):
-        """Start the recursive Habermas Machine process"""
+        """Start the recursive consensus generation process"""
         self.stop_event.clear()
         
         # Collect participant statements
@@ -1266,77 +1339,162 @@ class HabermasMachine:
             messagebox.showerror("Error", "Please provide at least 2 participant statements.")
             return
         
-        # Clear the recursive results display
-        for widget in self.recursive_results_frame.winfo_children():
-            widget.destroy()
-            
+        # Clear previous outputs
+        self.friendly_output.delete("1.0", "end")
+        self.detailed_output.delete("1.0", "end")
+        
+        # Set status
+        self.friendly_status_var.set("Generating...")
+        self.detailed_status_var.set("Generating...")
+        
+        # Generate a unique session ID
+        self.session_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        
         # Disable buttons during generation
         self.generate_btn.configure(state="disabled")
         self.recursive_generate_btn.configure(state="disabled")
-        self.simulate_election_btn.configure(state="disabled")
         
-        # Start recursive generation thread
-        Thread(target=self.run_recursive_habermas, daemon=True).start()
+        # Start generation thread
+        Thread(target=self.run_recursive_consensus, daemon=True).start()
     
-    def run_recursive_habermas(self):
-        """Run the recursive Habermas process"""
-        question = self.question_text.get("1.0", "end-1c").strip()
-        
-        # Get and validate max group size
+    def run_recursive_consensus(self):
+        """Run the recursive consensus generation process"""
         try:
-            max_group_size = min(9, max(2, int(self.max_group_size_var.get())))
-        except ValueError:
-            max_group_size = 9
-            self.root.after(0, lambda: self.max_group_size_var.set("9"))
-        
-        # Get voting strategy
-        voting_strategy = self.voting_strategy_var.get()
-        
-        # Create header in recursive results FIRST (this creates recursive_progress_label)
-        self.root.after(0, lambda: self.create_recursive_header(question, len(self.participant_statements), max_group_size))
-        
-        # Give time for the UI to update and create the progress label
-        time.sleep(0.1)
-        
-        # THEN update progress with information (only after recursive_progress_label exists)
-        self.root.after(0, lambda: self.update_recursive_progress(
-            f"Starting recursive process with {len(self.participant_statements)} participant statements..."
-        ))
-        
-        # Run the recursive process
-        final_statement = self.recursive_habermas_process(
-            question, 
-            self.participant_statements.copy(), 
-            max_group_size,
-            voting_strategy,
-            0,  # Initial level
-            {}  # Empty participant mapping (first level uses original participants)
-        )
-        
-        if not self.stop_event.is_set():
-            # Display final result
-            self.root.after(0, lambda: self.display_final_recursive_result(final_statement))
+            question = self.question_text.get("1.0", "end-1c").strip()
             
-        # Re-enable buttons
-        self.root.after(0, lambda: self.generate_btn.configure(state="normal"))
-        self.root.after(0, lambda: self.recursive_generate_btn.configure(state="normal"))
-
-    def update_recursive_progress(self, message):
-        """Update the recursive progress label if it exists"""
-        if hasattr(self, 'recursive_progress_label'):
-            self.recursive_progress_label.configure(text=message)
-
-    def recursive_habermas_process(self, question, statements, max_group_size, voting_strategy, level, participant_mapping):
+            # Get and validate max group size
+            try:
+                max_group_size = min(9, max(2, int(self.max_group_size_var.get())))
+            except ValueError:
+                max_group_size = 9
+                self.max_group_size_var.set("9")
+            
+            # Get voting strategy
+            voting_strategy = self.voting_strategy_var.get()
+            
+            # Initial log entries for friendly output
+            self.log_to_friendly(f"# Recursive Consensus Builder Results\n\n")
+            self.log_to_friendly(f"**Question:** {question}\n\n")
+            
+            friendly_intro = (
+                "The Recursive Consensus Builder is working to find common ground among multiple perspectives. "
+                "This process works by breaking down large groups into smaller discussion circles, "
+                "finding consensus within each circle, and then bringing these sub-consensus positions "
+                "together until a final group consensus emerges.\n\n"
+                
+                f"We're analyzing {len(self.participant_statements)} different perspectives "
+                f"with a maximum of {max_group_size} participants per discussion group.\n\n"
+            )
+            self.log_to_friendly(friendly_intro)
+            
+            # Log original participant statements
+            self.log_to_friendly("## Original Participant Statements\n\n")
+            
+            # Initial log entries for detailed output
+            self.log_to_detailed(f"# Recursive Consensus Process Detailed Record\n\n")
+            self.log_to_detailed(f"**Session ID:** {self.session_id}  \n")
+            self.log_to_detailed(f"**Time:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  \n")
+            self.log_to_detailed(f"**Model:** {self.model_var.get()}  \n")
+            self.log_to_detailed(f"**Process Type:** Recursive Consensus  \n")
+            self.log_to_detailed(f"**Max Group Size:** {max_group_size}  \n")
+            self.log_to_detailed(f"**Voting Strategy:** {voting_strategy}  \n\n")
+            self.log_to_detailed(f"## Question\n\n{question}\n\n")
+            self.log_to_detailed("## Original Participant Statements\n\n")
+            
+            # Log participant statements
+            for i, statement in enumerate(self.participant_statements):
+                self.log_to_friendly(f"**Participant {i+1}:**  \n{statement}\n\n")
+                self.log_to_detailed(f"**Participant {i+1}:**  \n{statement}\n\n")
+            
+            # Run the recursive process
+            self.log_to_friendly("## Starting Recursive Consensus Process...\n\n")
+            self.log_to_detailed("## Recursive Process\n\n")
+            
+            # Create a data structure to track the recursive process
+            process_data = {
+                "statements": self.participant_statements.copy(),
+                "level": 0,
+                "participant_mapping": {}  # Empty mapping for first level (original participants)
+            }
+            
+            # Run the recursive process
+            final_statement = self.recursive_habermas_process(
+                question, 
+                process_data,
+                max_group_size,
+                voting_strategy
+            )
+            
+            if self.stop_event.is_set():
+                self.cleanup_after_process()
+                return
+                
+            if final_statement:
+                # Display the final result at the top for visibility
+                self.root.after(0, lambda: self.update_friendly_output_with_consensus(final_statement))
+                
+                # Log the final result
+                self.log_to_friendly("\n## Consensus Building Process Complete\n\n")
+                self.log_to_friendly(
+                    "The recursive process has successfully integrated all perspectives to reach a group consensus. "
+                    "The statement above represents a position that best accommodates the diverse viewpoints "
+                    "expressed by all participants.\n\n"
+                )
+                
+                self.log_to_detailed("\n## Final Consensus Statement\n\n")
+                self.log_to_detailed(f"{final_statement}\n\n")
+                self.log_to_detailed(
+                    "The recursive consensus process is complete. This final statement represents "
+                    "the integration of all participant viewpoints through multiple levels of deliberation.\n\n"
+                )
+            else:
+                self.log_to_friendly("\n## Process Failed\n\n")
+                self.log_to_friendly("The consensus building process was unable to complete successfully.\n\n")
+                
+                self.log_to_detailed("\n## Process Failed\n\n")
+                self.log_to_detailed("The recursive consensus process was unable to complete successfully.\n\n")
+            
+            # Auto save if enabled
+            if self.save_output_var.get():
+                try:
+                    # Save friendly output
+                    friendly_path = f"habermas_recursive_results_{self.session_id}.md"
+                    with open(friendly_path, 'w', encoding='utf-8') as file:
+                        file.write(self.friendly_output.get("1.0", "end-1c"))
+                    
+                    # Save detailed output
+                    detailed_path = f"habermas_recursive_detailed_{self.session_id}.md"
+                    with open(detailed_path, 'w', encoding='utf-8') as file:
+                        file.write(self.detailed_output.get("1.0", "end-1c"))
+                    
+                    self.log_to_friendly(f"\n\n*Results automatically saved to {friendly_path}*\n")
+                    self.log_to_detailed(f"\n\n*Detailed record automatically saved to {detailed_path}*\n")
+                except Exception as e:
+                    self.log_to_friendly(f"\n\n*Failed to auto-save results: {str(e)}*\n")
+                    logger.error(f"Auto-save error: {str(e)}")
+            
+            # Set status to complete
+            self.root.after(0, lambda: self.friendly_status_var.set("Complete"))
+            self.root.after(0, lambda: self.detailed_status_var.set("Complete"))
+            
+        except Exception as e:
+            error_msg = f"Error in recursive consensus process: {str(e)}"
+            self.log_to_friendly(f"\n\n**Error:** {error_msg}\n")
+            self.log_to_detailed(f"\n\n**Error:** {error_msg}\n\nStacktrace:\n```\n{traceback.format_exc()}\n```\n")
+            logger.error(error_msg, exc_info=True)
+        
+        finally:
+            self.cleanup_after_process()
+    
+    def recursive_habermas_process(self, question, process_data, max_group_size, voting_strategy):
         """
-        Run the recursive Habermas process for a list of statements
+        Run the recursive consensus process
         
         Args:
             question: The question being debated
-            statements: List of statements to process
+            process_data: Dict containing statements, level, and participant_mapping
             max_group_size: Maximum number of statements per group
-            voting_strategy: Strategy for voting in elections ('own_groups_only' or 'all_elections')
-            level: Current recursion level (0 = initial statements)
-            participant_mapping: Dictionary mapping meta-statement indices to original participant indices
+            voting_strategy: Strategy for voting in elections
         
         Returns:
             The winning consensus statement
@@ -1344,12 +1502,19 @@ class HabermasMachine:
         if self.stop_event.is_set():
             return None
             
+        statements = process_data["statements"]
+        level = process_data["level"]
+        participant_mapping = process_data["participant_mapping"]
+        
+        # Log the current level
+        self.log_to_friendly(f"### Level {level+1} - Processing {len(statements)} statements\n\n")
+        self.log_to_detailed(f"### Level {level+1}\n\n")
+        self.log_to_detailed(f"Processing {len(statements)} statements\n\n")
+        
         # If we have few enough statements to process in one group, do it directly
         if len(statements) <= max_group_size:
-            # Create a frame to show this group's process
-            group_frame = self.root.after(0, lambda: self.create_recursive_group_frame(
-                level, 0, statements, len(statements)
-            ))
+            self.log_to_friendly(f"All statements fit in a single group. Processing directly...\n\n")
+            self.log_to_detailed(f"All statements fit in a single group. Processing directly.\n\n")
             
             # Get list of original participant indices for this group
             if level == 0:
@@ -1377,6 +1542,9 @@ class HabermasMachine:
         # Otherwise, divide into groups and process recursively
         groups = self.divide_statements_into_groups(statements, max_group_size)
         
+        self.log_to_friendly(f"Dividing into {len(groups)} groups...\n\n")
+        self.log_to_detailed(f"Dividing into {len(groups)} groups\n\n")
+        
         # Process each group to get winning statements
         winning_statements = []
         new_participant_mapping = {}  # Maps winning statement index to original participant indices
@@ -1384,24 +1552,36 @@ class HabermasMachine:
         for group_idx, group in enumerate(groups):
             if self.stop_event.is_set():
                 return None
-                
-            # Create a frame to show this group's process
-            group_frame = self.root.after(0, lambda gi=group_idx, g=group: self.create_recursive_group_frame(
-                level, gi, g, len(statements)
-            ))
+            
+            self.log_to_friendly(f"#### Processing Group {group_idx+1} ({len(group)} statements)\n\n")
+            self.log_to_detailed(f"#### Group {group_idx+1}\n\n")
+            self.log_to_detailed(f"Contains {len(group)} statements\n\n")
             
             # Get list of original participant indices for this group
             if level == 0:
                 # At level 0, map the group's statement indices to original participant indices
-                group_participant_indices = [i for i, _ in enumerate(group)]
+                group_participant_indices = []
+                start_idx = sum(len(g) for g in groups[:group_idx])
+                for i in range(len(group)):
+                    group_participant_indices.append(start_idx + i)
             else:
                 # At higher levels, use the existing mapping to find original participants
                 group_participant_indices = []
                 start_idx = sum(len(g) for g in groups[:group_idx])
-                for i, _ in enumerate(group):
+                for i in range(len(group)):
                     orig_idx = start_idx + i
                     if orig_idx in participant_mapping:
                         group_participant_indices.extend(participant_mapping[orig_idx])
+            
+            # Log the statements in this group
+            self.log_to_detailed("**Statements in this group:**\n\n")
+            for i, stmt in enumerate(group):
+                # Get original participant numbers if available
+                if level == 0:
+                    orig_p_idx = group_participant_indices[i]
+                    self.log_to_detailed(f"Statement {i+1} (from Participant {orig_p_idx+1}):\n{stmt}\n\n")
+                else:
+                    self.log_to_detailed(f"Statement {i+1}:\n{stmt}\n\n")
             
             # Process this group
             winning_statement = self.process_single_group(
@@ -1418,20 +1598,32 @@ class HabermasMachine:
                 # Update the participant mapping
                 new_idx = len(winning_statements) - 1
                 new_participant_mapping[new_idx] = group_participant_indices
+                
+                self.log_to_friendly(f"Group {group_idx+1} consensus:\n\n{winning_statement}\n\n")
             
         # If we only got one winning statement, return it
         if len(winning_statements) == 1:
+            self.log_to_friendly("Only one group at this level. Using its consensus as the final result.\n\n")
+            self.log_to_detailed("Only one winning statement from this level. Using it as final result.\n\n")
             return winning_statements[0]
             
         # Otherwise, recurse to process the winning statements
         if winning_statements:
+            self.log_to_friendly(f"Moving to next level with {len(winning_statements)} group consensuses...\n\n")
+            self.log_to_detailed(f"Moving to next level with {len(winning_statements)} winning statements\n\n")
+            
+            # Set up the next level's process data
+            next_process_data = {
+                "statements": winning_statements,
+                "level": level + 1,
+                "participant_mapping": new_participant_mapping
+            }
+            
             return self.recursive_habermas_process(
                 question, 
-                winning_statements, 
+                next_process_data,
                 max_group_size, 
-                voting_strategy,
-                level + 1,
-                new_participant_mapping
+                voting_strategy
             )
         
         return None
@@ -1441,29 +1633,21 @@ class HabermasMachine:
         if self.stop_event.is_set():
             return None
             
-        group_size = len(statements)
-        group_label = f"Level {level}, Group {group_idx+1} ({group_size} statements)"
+        group_label = f"Level {level+1}, Group {group_idx+1} ({len(statements)} statements)"
         
-        # Update debug with info about processing this group
-        self.root.after(0, lambda: self.update_debug_prompt(
-            f"Processing {group_label}\n\n"
-            f"Question: {question}\n\n"
-            f"Statements:\n" + "\n\n".join([f"{i+1}. {s}" for i, s in enumerate(statements)])
-        ))
-        
-        # Update UI to show we're working on this group
-        self.root.after(0, lambda: self.update_recursive_group_progress(
-            level, group_idx, "Generating candidates...", 
-            "Starting candidate generation for this group..."
-        ))
+        # Log what we're about to do
+        self.log_to_detailed(f"**Processing {group_label}**\n\n")
         
         # Generate candidate statements for this group
+        self.log_to_detailed("##### Candidate Generation\n\n")
+        
+        # Generate candidates
         candidates = []
         
         try:
-            num_candidates = min(group_size, max(2, int(self.num_candidates_var.get())))
+            num_candidates = min(len(statements), max(2, int(self.num_candidates_var.get())))
         except ValueError:
-            num_candidates = min(group_size, 3)
+            num_candidates = min(len(statements), 4)
             
         for i in range(num_candidates):
             if self.stop_event.is_set():
@@ -1474,25 +1658,15 @@ class HabermasMachine:
             random.shuffle(shuffled_statements)
             
             # Generate a candidate
-            self.root.after(0, lambda: self.update_debug_response(
-                f"Generating candidate {i+1}/{num_candidates} for {group_label}..."
-            ))
+            self.log_to_detailed(f"Generating candidate {i+1}/{num_candidates}\n\n")
             
             candidate = self.generate_single_candidate(question, shuffled_statements, i+1)
             if candidate:
                 candidates.append(candidate)
-                
-                # Update UI to show progress
-                self.root.after(0, lambda c=candidate, i=i: self.update_recursive_group_progress(
-                    level, group_idx, f"Generated candidate {i+1}/{num_candidates}", 
-                    f"Candidate {i+1}:\n{c[:150]}..."
-                ))
+                self.log_to_detailed(f"**Candidate {i+1}:**\n{candidate}\n\n")
         
         if not candidates:
-            self.root.after(0, lambda: self.update_recursive_group_progress(
-                level, group_idx, "Failed to generate candidates", 
-                "No candidates were successfully generated for this group."
-            ))
+            self.log_to_detailed("**Error:** Failed to generate any candidate statements.\n\n")
             return None
             
         # For voting, determine which participants vote in this election
@@ -1513,42 +1687,9 @@ class HabermasMachine:
             ]
             
         # Run an election with these candidates and participants
-        self.root.after(0, lambda: self.update_recursive_group_progress(
-            level, group_idx, f"Running election with {len(voting_participants)} voters", 
-            f"Candidates: {len(candidates)}\nVoters: {len(voting_participants)}"
-        ))
-            
-        winner_idx = self.run_mini_election(question, candidates, voting_participants)
-        
-        if winner_idx is not None:
-            winning_statement = candidates[winner_idx]
-            
-            # Update UI to show result
-            self.root.after(0, lambda w=winning_statement: self.update_recursive_group_result(
-                level, group_idx, w
-            ))
-            
-            return winning_statement
-        
-        self.root.after(0, lambda: self.update_recursive_group_progress(
-            level, group_idx, "Failed to determine a winner", 
-            "The election process did not produce a clear winner."
-        ))
-        return None
-    
-    def run_mini_election(self, question, candidates, voting_participants):
-        """Run a smaller election for a group of statements
-        
-        Args:
-            question: The debate question
-            candidates: List of candidate statements
-            voting_participants: List of (participant_idx, statement) tuples
-            
-        Returns:
-            Index of winning candidate or None
-        """
-        if not candidates or not voting_participants:
-            return None
+        self.log_to_detailed("##### Election Simulation\n\n")
+        self.log_to_detailed(f"Number of candidates: {len(candidates)}\n")
+        self.log_to_detailed(f"Number of voters: {len(voting_participants)}\n\n")
             
         # Initialize rankings
         rankings = {i: [] for i in range(len(voting_participants))}
@@ -1558,8 +1699,10 @@ class HabermasMachine:
             if self.stop_event.is_set():
                 return None
                 
+            self.log_to_detailed(f"**Predicting ranking for Voter {p_idx+1} (Participant {orig_idx+1})**\n\n")
+            
             # Predict ranking for this participant
-            predicted_ranking, _ = self.predict_participant_ranking_json(
+            predicted_ranking, attempts_log = self.predict_participant_ranking_json(
                 question, 
                 statement, 
                 candidates,
@@ -1568,20 +1711,28 @@ class HabermasMachine:
             
             if predicted_ranking:
                 rankings[p_idx] = predicted_ranking
+                self.log_to_detailed(f"**Predicted ranking:** {[r+1 for r in predicted_ranking]}\n\n")
         
-        if not rankings:
+        if self.stop_event.is_set():
             return None
             
         # Calculate winner using Schulze method
-        winner_idx, _, _ = self.schulze_method(rankings, len(candidates))
-        return winner_idx
+        self.log_to_detailed("**Calculating winner using Schulze Method**\n\n")
+        
+        winner_idx, pairwise_matrix, strongest_paths = self.schulze_method(rankings, len(candidates))
+        
+        # Log the winner
+        self.log_to_detailed(f"**Winner calculated:** Candidate {winner_idx+1}\n\n")
+        self.log_to_detailed(f"**Winning statement:**\n{candidates[winner_idx]}\n\n")
+        
+        return candidates[winner_idx]
     
     def divide_statements_into_groups(self, statements, max_group_size):
+        """Divide statements into groups of maximum size"""
         # Shuffle statements first to avoid manipulation
         shuffled_statements = statements.copy()
         random.shuffle(shuffled_statements)
         
-        """Divide statements into groups of maximum size"""
         # Calculate number of groups needed
         num_statements = len(shuffled_statements)
         num_groups = math.ceil(num_statements / max_group_size)
@@ -1603,177 +1754,89 @@ class HabermasMachine:
             
         return groups
     
-    def create_recursive_header(self, question, num_participants, max_group_size):
-        """Create a header for the recursive results display"""
-        header_frame = ctk.CTkFrame(self.recursive_results_frame)
-        header_frame.pack(fill="x", pady=10, padx=5)
+    def update_friendly_output_with_winner(self, winning_statement):
+        """Insert the winning statement at the top of the friendly output"""
+        # Get current content
+        current_content = self.friendly_output.get("1.0", "end-1c")
         
-        ctk.CTkLabel(
-            header_frame, 
-            text="Recursive Habermas Machine Results", 
-            font=("Arial", 16, "bold")
-        ).pack(pady=5)
+        # Create new content with winning statement at the top
+        winner_section = f"## 🏆 Winning Consensus Statement\n\n{winning_statement}\n\n---\n\n"
+        new_content = winner_section + current_content
         
-        info_text = (
-            f"Question: {question}\n"
-            f"Total participants: {num_participants}\n"
-            f"Maximum group size: {max_group_size}\n"
-            f"Voting strategy: {self.voting_strategy_var.get()}\n"
-        )
+        # Update the textbox
+        self.friendly_output.delete("1.0", "end")
+        self.friendly_output.insert("1.0", new_content)
         
-        info_label = ctk.CTkLabel(header_frame, text=info_text, justify="left")
-        info_label.pack(pady=5, padx=10, anchor="w")
-        
-        # Add a progress frame
-        self.recursive_progress_frame = ctk.CTkFrame(self.recursive_results_frame)
-        self.recursive_progress_frame.pack(fill="x", pady=5, padx=5)
-        
-        ctk.CTkLabel(
-            self.recursive_progress_frame, 
-            text="Current progress:", 
-            font=("Arial", 12, "bold")
-        ).pack(pady=5, anchor="w", padx=10)
-        
-        self.recursive_progress_label = ctk.CTkLabel(
-            self.recursive_progress_frame, 
-            text="Starting recursive process...", 
-            justify="left"
-        )
-        self.recursive_progress_label.pack(pady=5, padx=10, anchor="w")
-        
-        # Switch to the recursive results tab
-        self.results_tabview.set("Recursive Results")
+        # Scroll to the top
+        self.friendly_output.see("1.0")
     
-    def create_recursive_group_frame(self, level, group_idx, statements, total_statements):
-        """Create a frame for displaying a group's process in the recursive UI"""
-        group_label = f"Level {level}, Group {group_idx+1}"
+    def update_friendly_output_with_consensus(self, consensus_statement):
+        """Insert the final consensus statement at the top of the friendly output"""
+        # Get current content
+        current_content = self.friendly_output.get("1.0", "end-1c")
         
-        # Create a collapsible frame for this group
-        group_frame = ctk.CTkFrame(self.recursive_results_frame)
-        group_frame.pack(fill="x", pady=5, padx=5)
+        # Create new content with consensus statement at the top
+        consensus_section = f"## 🏆 Final Group Consensus\n\n{consensus_statement}\n\n---\n\n"
+        new_content = consensus_section + current_content
         
-        # Header with toggle button
-        header_frame = ctk.CTkFrame(group_frame)
-        header_frame.pack(fill="x", pady=2)
+        # Update the textbox
+        self.friendly_output.delete("1.0", "end")
+        self.friendly_output.insert("1.0", new_content)
         
-        # Update progress label
-        self.recursive_progress_label.configure(
-            text=f"Processing {group_label} ({len(statements)} of {total_statements} statements)"
-        )
-        
-        # Group label
-        ctk.CTkLabel(
-            header_frame, 
-            text=f"{group_label} ({len(statements)} statements)", 
-            font=("Arial", 12, "bold"),
-            anchor="w"
-        ).pack(side="left", padx=10, pady=5)
-        
-        # Progress label for this group
-        progress_label = ctk.CTkLabel(header_frame, text="Initializing...", anchor="e")
-        progress_label.pack(side="right", padx=10, pady=5)
-        
-        # Content frame
-        content_frame = ctk.CTkFrame(group_frame)
-        content_frame.pack(fill="x", pady=5, padx=10, expand=True)
-        
-        # Text display for details
-        details_text = ctk.CTkTextbox(content_frame, height=80, wrap="word")
-        details_text.pack(fill="x", pady=5, expand=True)
-        details_text.insert("1.0", "Processing group...")
-        details_text.configure(state="disabled")
-        
-        # Result frame for the winning statement
-        result_frame = ctk.CTkFrame(group_frame)
-        
-        # Store these widgets for later updates
-        group_frame.progress_label = progress_label
-        group_frame.details_text = details_text
-        group_frame.result_frame = result_frame
-        
-        # Save the frame for later reference by level and group index
-        key = f"level{level}_group{group_idx}"
-        if not hasattr(self, 'recursive_group_frames'):
-            self.recursive_group_frames = {}
-        self.recursive_group_frames[key] = group_frame
-        
-        return group_frame
+        # Scroll to the top
+        self.friendly_output.see("1.0")
     
-    def update_recursive_group_progress(self, level, group_idx, progress_text, details_text):
-        """Update the progress display for a group"""
-        key = f"level{level}_group{group_idx}"
-        if hasattr(self, 'recursive_group_frames') and key in self.recursive_group_frames:
-            group_frame = self.recursive_group_frames[key]
-            
-            # Update progress label
-            group_frame.progress_label.configure(text=progress_text)
-            
-            # Update details text
-            group_frame.details_text.configure(state="normal")
-            group_frame.details_text.delete("1.0", "end")
-            group_frame.details_text.insert("1.0", details_text)
-            group_frame.details_text.configure(state="disabled")
+    def log_to_friendly(self, text):
+        """Append text to the friendly output"""
+        self.root.after(0, lambda: self._append_to_textbox(self.friendly_output, text))
     
-    def update_recursive_group_result(self, level, group_idx, winning_statement):
-        """Update a group with its winning statement"""
-        key = f"level{level}_group{group_idx}"
-        if hasattr(self, 'recursive_group_frames') and key in self.recursive_group_frames:
-            group_frame = self.recursive_group_frames[key]
-            
-            # Update progress label
-            group_frame.progress_label.configure(text="Complete", text_color="green")
-            
-            # Display the winning statement
-            if not group_frame.result_frame.winfo_ismapped():
-                group_frame.result_frame.pack(fill="x", pady=5, padx=10)
-            
-            for widget in group_frame.result_frame.winfo_children():
-                widget.destroy()
-                
-            ctk.CTkLabel(
-                group_frame.result_frame, 
-                text="Winning Statement:", 
-                font=("Arial", 11, "bold"),
-                anchor="w"
-            ).pack(anchor="w", pady=(5,2))
-            
-            result_text = ctk.CTkTextbox(group_frame.result_frame, height=60, wrap="word")
-            result_text.pack(fill="x", pady=2)
-            result_text.insert("1.0", winning_statement)
-            result_text.configure(state="disabled")
+    def log_to_detailed(self, text):
+        """Append text to the detailed output"""
+        self.root.after(0, lambda: self._append_to_textbox(self.detailed_output, text))
     
-    def display_final_recursive_result(self, final_statement):
-        """Display the final result of the recursive process"""
-        if not final_statement:
-            self.recursive_progress_label.configure(
-                text="Process complete, but no final statement was generated.",
-                text_color="red"
-            )
-            return
-            
-        # Create a frame for the final result
-        final_frame = ctk.CTkFrame(self.recursive_results_frame)
-        final_frame.pack(fill="x", pady=10, padx=5)
+    def _append_to_textbox(self, textbox, text):
+        """Helper to append text to a textbox"""
+        # Save the current position
+        current_pos = textbox.index("insert")
         
-        ctk.CTkLabel(
-            final_frame, 
-            text="FINAL CONSENSUS STATEMENT", 
-            font=("Arial", 16, "bold")
-        ).pack(pady=5)
+        # Append the text
+        textbox.insert("end", text)
         
-        # Update progress label
-        self.recursive_progress_label.configure(
-            text="Recursive Habermas Machine completed successfully!",
-            text_color="green"
-        )
+        # Restore cursor position
+        textbox.mark_set("insert", current_pos)
+    
+    def update_debug_prompt(self, prompt):
+        """Update the debug prompt display"""
+        self.prompt_text.delete("1.0", "end")
+        self.prompt_text.insert("1.0", prompt)
+    
+    def update_debug_response(self, response):
+        """Update the debug response display"""
+        self.response_text.delete("1.0", "end")
+        self.response_text.insert("1.0", response)
+    
+    def cleanup_after_process(self):
+        """Clean up after the process is complete"""
+        self.root.after(0, lambda: self.generate_btn.configure(state="normal"))
+        self.root.after(0, lambda: self.recursive_generate_btn.configure(state="normal"))
+    
+    def stop_generation(self):
+        """Stop any ongoing generation process"""
+        self.stop_event.set()
+        if self.current_response:
+            try:
+                self.current_response.close()
+            except:
+                pass
         
-        # Display the final statement
-        final_text = ctk.CTkTextbox(final_frame, height=200, wrap="word")
-        final_text.pack(fill="both", expand=True, pady=10, padx=10)
-        final_text.insert("1.0", final_statement)
+        self.log_to_friendly("\n**Process stopped by user.**\n")
+        self.log_to_detailed("\n**Process stopped by user.**\n")
         
-        # Stay on the recursive results tab
-        self.results_tabview.set("Recursive Results")
+        self.friendly_status_var.set("Stopped")
+        self.detailed_status_var.set("Stopped")
+        
+        self.generate_btn.configure(state="normal")
+        self.recursive_generate_btn.configure(state="normal")
 
 def main():
     try:
