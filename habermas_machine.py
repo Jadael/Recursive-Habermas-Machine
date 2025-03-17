@@ -71,7 +71,7 @@ class HabermasMachine:
         
         # Default prompt templates
         self.default_templates = {
-            "candidate_generation": "Given the following question and participant statements, generate a single group statement that synthesizes their perspectives. This should represent a fair consensus or compromise position that most participants could accept.\n\n"
+            "candidate_generation": "Given the following question and participant statements, generate a single group statement that synthesizes their perspectives. This should represent a fair consensus or compromise position that most participants could accept. The group statement should include and be representative of all details, concerns, suggestions, or questions from all participants, even if that make the combined statement longer.\n\n"
                                   "---\n\nQuestion: {question}\n\n"
                                   "---\n\n{participant_statements}\n\n---\n\n"
                                   "Generate a thoughtful and nuanced group statement that represents a fair synthesis of these perspectives. Focus on finding common ground, acknowledge areas of disagreement or lack of information, and present a position that most participants could accept.",
@@ -81,7 +81,7 @@ class HabermasMachine:
                                 "Participant {participant_num}'s original statement: {participant_statement}\n\n"
                                 "Group Statements to Rank:\n\n"
                                 "{candidate_statements}\n\n\n\n"
-                                """Based on the participant's original statement, predict their ranking of these group statements from most preferred to least preferred as a JSON object:\n\n{{\n  "ranking": []\n}}\n\nThe ranking should reflect which statements best align with the participant's expressed viewpoint, values, and concerns."""
+                                """Based on the participant's original statement, predict their ranking of these group statements from most preferred to least preferred as a JSON object:\n\n{{\n  "ranking": [0, 0, ...]\n}}\n\nThe ranking should reflect which statements best align with the participant's expressed viewpoint, values, and concerns."""
         }
         
         # Create templates that will be edited
@@ -131,8 +131,8 @@ class HabermasMachine:
     def create_layout(self):
         # Configure grid layout with 3 columns
         self.root.grid_columnconfigure(0, weight=1)  # Left: Settings & Inputs
-        self.root.grid_columnconfigure(1, weight=2)  # Middle: Results - giving more space
-        self.root.grid_columnconfigure(2, weight=1)  # Right: Debug
+        self.root.grid_columnconfigure(1, weight=3)  # Middle: Results - giving more space
+        self.root.grid_columnconfigure(2, weight=2)  # Right: Debug
         self.root.grid_rowconfigure(0, weight=1)
         
         # Create main frames
@@ -154,14 +154,23 @@ class HabermasMachine:
         self.setup_right_column()
     
     def setup_left_column(self):
+        # Configure the left column to expand
+        self.left_column.grid_columnconfigure(0, weight=1)
+        self.left_column.grid_rowconfigure(0, weight=1)
+        
         # Create a tabview for the left column (Settings, Inputs)
         self.left_tabview = ctk.CTkTabview(self.left_column)
-        self.left_tabview.pack(fill="both", expand=True, padx=5, pady=5)
+        self.left_tabview.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
         
         # Add tabs for the left column
         self.left_tabview.add("Inputs")
         self.left_tabview.add("Settings")
         self.left_tabview.add("Templates")
+        
+        # Make sure each tab can expand
+        for tab_name in ["Inputs", "Settings", "Templates"]:
+            self.left_tabview.tab(tab_name).grid_columnconfigure(0, weight=1)
+            self.left_tabview.tab(tab_name).grid_rowconfigure(0, weight=1)
         
         # Setup the Inputs tab (question, participants)
         self.setup_inputs_tab()
@@ -173,33 +182,47 @@ class HabermasMachine:
         self.setup_templates_tab()
     
     def setup_inputs_tab(self):
-        # Create a scrollable frame for inputs
-        inputs_frame = ctk.CTkScrollableFrame(self.left_tabview.tab("Inputs"))
-        inputs_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        # Configure grid for the Inputs tab
+        inputs_tab = self.left_tabview.tab("Inputs")
+        inputs_tab.grid_columnconfigure(0, weight=1)
+        inputs_tab.grid_rowconfigure(0, weight=0)  # Question - fixed height
+        inputs_tab.grid_rowconfigure(1, weight=1)  # Participants - expandable
+        inputs_tab.grid_rowconfigure(2, weight=0)  # Buttons - fixed height
         
-        # The debate question
-        ctk.CTkLabel(inputs_frame, text="Question:", anchor="w", font=("Arial", 12, "bold")).pack(fill="x", padx=10, pady=(10, 5))
-        self.question_text = ctk.CTkTextbox(inputs_frame, height=60, font=("Arial", 12))
+        # Question section - fixed height
+        question_frame = ctk.CTkFrame(inputs_tab)
+        question_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        question_frame.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(question_frame, text="Question:", anchor="w", font=("Arial", 12, "bold")).pack(fill="x", padx=10, pady=(5, 2))
+        self.question_text = ctk.CTkTextbox(question_frame, height=60, font=("Arial", 12))
         self.question_text.pack(fill="x", padx=10, pady=(0, 5))
         
-        # Participant statements
-        participants_header = ctk.CTkFrame(inputs_frame)
-        participants_header.pack(fill="x", padx=10, pady=(10, 5))
+        # Participants section - this should expand to fill space
+        participants_frame = ctk.CTkFrame(inputs_tab)
+        participants_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
+        participants_frame.grid_columnconfigure(0, weight=1)
+        participants_frame.grid_rowconfigure(1, weight=1)  # Make the textbox row expandable
+        
+        # Participants header
+        participants_header = ctk.CTkFrame(participants_frame)
+        participants_header.grid(row=0, column=0, sticky="ew", padx=0, pady=(5, 2))
+        participants_header.grid_columnconfigure(0, weight=1)
         
         ctk.CTkLabel(participants_header, text="Participant Statements (one per line):", anchor="w", font=("Arial", 12, "bold")).pack(side="left", fill="x", padx=5)
         self.participant_count_label = ctk.CTkLabel(participants_header, text="Count: 0", width=100)
         self.participant_count_label.pack(side="right", padx=5)
         
-        # Create a single textbox for all participant statements
-        self.participants_text = ctk.CTkTextbox(inputs_frame, height=300, wrap="word", font=("Arial", 12))
-        self.participants_text.pack(fill="both", expand=True, padx=10, pady=5)
+        # Create the participants textbox - in a separate row that can expand
+        self.participants_text = ctk.CTkTextbox(participants_frame, wrap="word", font=("Arial", 12))
+        self.participants_text.grid(row=1, column=0, sticky="nsew", padx=0, pady=(0, 5))
         
         # Add text changed callback to update participant count
         self.participants_text.bind("<KeyRelease>", self.update_participant_count)
         
-        # Control buttons
-        self.buttons_frame = ctk.CTkFrame(inputs_frame)
-        self.buttons_frame.pack(fill="x", padx=10, pady=10)
+        # Buttons section - fixed height
+        self.buttons_frame = ctk.CTkFrame(inputs_tab)
+        self.buttons_frame.grid(row=2, column=0, sticky="ew", padx=10, pady=(5, 10))
         
         self.generate_btn = ctk.CTkButton(
             self.buttons_frame,
@@ -1756,6 +1779,9 @@ class HabermasMachine:
     
     def update_friendly_output_with_winner(self, winning_statement):
         """Insert the winning statement at the top of the friendly output"""
+        # Flash to indicate activity
+        self.flash_textbox(self.friendly_output)
+        
         # Get current content
         current_content = self.friendly_output.get("1.0", "end-1c")
         
@@ -1769,9 +1795,12 @@ class HabermasMachine:
         
         # Scroll to the top
         self.friendly_output.see("1.0")
-    
+
     def update_friendly_output_with_consensus(self, consensus_statement):
         """Insert the final consensus statement at the top of the friendly output"""
+        # Flash to indicate activity
+        self.flash_textbox(self.friendly_output)
+        
         # Get current content
         current_content = self.friendly_output.get("1.0", "end-1c")
         
@@ -1795,25 +1824,52 @@ class HabermasMachine:
         self.root.after(0, lambda: self._append_to_textbox(self.detailed_output, text))
     
     def _append_to_textbox(self, textbox, text):
-        """Helper to append text to a textbox"""
-        # Save the current position
-        current_pos = textbox.index("insert")
+        """Helper to append text to a textbox with smooth scrolling"""
+        # Flash the textbox to indicate activity
+        self.flash_textbox(textbox)
+        
+        # Determine if the textbox is scrolled to the bottom
+        current_position = textbox.yview()
+        at_bottom = (current_position[1] >= 0.99)
+        
+        # Scroll to end before appending if we were at the bottom
+        if at_bottom:
+            textbox.see("end")
         
         # Append the text
         textbox.insert("end", text)
         
-        # Restore cursor position
-        textbox.mark_set("insert", current_pos)
+        # Maintain scroll position based on previous state
+        if at_bottom:
+            textbox.see("end")
+            textbox.yview_moveto(1.0)
+            
+    def flash_textbox(self, textbox, duration=0.33):
+        """Flash the textbox background to indicate activity"""
+        original_color = textbox.cget("fg_color")
+        
+        # Set to dull orange
+        textbox.configure(fg_color="#3e103e")
+        
+        # Schedule reversion to original color after duration
+        self.root.after(int(duration * 1000), lambda: textbox.configure(fg_color=original_color))
     
     def update_debug_prompt(self, prompt):
-        """Update the debug prompt display"""
+        """Update the debug prompt display with scroll to top"""
+        self.flash_textbox(self.prompt_text)
         self.prompt_text.delete("1.0", "end")
         self.prompt_text.insert("1.0", prompt)
-    
+        # Always scroll to top for prompt
+        self.prompt_text.see("1.0")
+
     def update_debug_response(self, response):
-        """Update the debug response display"""
+        """Update the debug response display with scroll to bottom"""
+        self.flash_textbox(self.response_text)
         self.response_text.delete("1.0", "end")
         self.response_text.insert("1.0", response)
+        # Always scroll to bottom for response
+        self.response_text.see("end")
+        self.response_text.yview_moveto(1.0)
     
     def cleanup_after_process(self):
         """Clean up after the process is complete"""
