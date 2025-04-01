@@ -71,17 +71,16 @@ class HabermasMachine:
         
         # Default prompt templates
         self.default_templates = {
-            "candidate_generation": "Given the following question and participant statements, generate a single group statement that synthesizes their perspectives. This should represent a fair consensus or compromise position that most participants could accept. The group statement should include and be representative of all details, concerns, suggestions, or questions from all participants, even if that make the combined statement longer.\n\n"
+            "candidate_generation": "Given the following question and participant statements, please combine these statements into a single group statement that synthesizes their viewpoints and includes all their individual points and concerns. This should represent a fair consensus or compromise position that most participants could accept. The group statement should include and be representative of all details, concerns, suggestions, or questions from all participants, even if that make the combined statement longer.\n\n"
                                   "---\n\nQuestion: {question}\n\n"
-                                  "---\n\n{participant_statements}\n\n---\n\n"
-                                  "Generate a thoughtful and nuanced group statement that represents a fair synthesis of these perspectives. Focus on finding common ground, acknowledge areas of disagreement or lack of information, and present a position that most participants could accept.",
+                                  "---\n\n{participant_statements}\n\n---\n\n",
             
-            "ranking_prediction": "Given a participant's statement on a question, predict how they would rank different group statements from most preferred (1) to least preferred ({num_candidates}).\n\n\n\n"
+            "ranking_prediction": "Given this participant's statement on a question, predict how this participant would rank different group statements from most preferred (1) to least preferred ({num_candidates}).\n\n\n\n"
                                 "Question: {question}\n\n"
                                 "Participant {participant_num}'s original statement: {participant_statement}\n\n"
                                 "Group Statements to Rank:\n\n"
                                 "{candidate_statements}\n\n\n\n"
-                                """Based on the participant's original statement, predict their ranking of these group statements from most preferred to least preferred as a JSON object:\n\n{{\n  "ranking": [0, 0, ...]\n}}\n\nThe ranking should reflect which statements best align with the participant's expressed viewpoint, values, and concerns."""
+                                """Based on the participant's original statement, predict their ranking of these group statements from most preferred to least preferred as a JSON object:\n\n{{\n  "ranking": [0, 0, ...]\n}}\n\nImportant: Your response MUST contain ONLY a valid JSON object with a list of integer rankings under the key "ranking", NOT a list of statements, and must align with how this participant would rank them; e.g. how aligned they are with this participant's stance and priorities."""
         }
         
         # Create templates that will be edited
@@ -92,12 +91,12 @@ class HabermasMachine:
         
         # Configure default values
         self.model_var.set("deepseek-r1:14b")
-        self.temperature_var.set("0.6")
+        self.temperature_var.set("0.7")
         self.top_p_var.set("0.9")
         self.top_k_var.set("40")
         self.ranking_temperature_var.set("0.2")
         self.max_retries_var.set("3")  # Default for retries
-        self.max_group_size_var.set("9")  # Default max group size
+        self.max_group_size_var.set("12")  # Default max group size
         self.num_candidates_var.set("4")  # Default number of candidates
         self.question_text.insert("1.0", "Should voting be compulsory?")
         
@@ -819,7 +818,7 @@ class HabermasMachine:
     def generate_candidate_statements(self, question):
         """Generate candidate consensus statements"""
         try:
-            num_candidates = min(10, max(2, int(self.num_candidates_var.get())))
+            num_candidates = min(9, max(2, int(self.num_candidates_var.get())))
         except ValueError:
             num_candidates = 4
             self.num_candidates_var.set("4")
@@ -996,9 +995,9 @@ class HabermasMachine:
         system_prompt = self.create_ranking_system_prompt(len(candidate_statements))
         
         # Prepare candidate statements text
-        candidate_statements_text = ""
+        candidate_statements_text = "\n\n---\n\n"
         for i, statement in enumerate(candidate_statements):
-            candidate_statements_text += f"Statement {i+1}:\n{statement}\n\n"
+            candidate_statements_text += f"```\nSTATEMENT {i+1}:\n{statement}\n```\n\n"
         
         # Get the template and format it
         template = self.prompt_templates["ranking_prediction"] 
@@ -1011,8 +1010,8 @@ class HabermasMachine:
         )
         
         # Log the prompt to detailed output
-        self.log_to_detailed(f"**System Prompt:**\n\n```\n{system_prompt}\n```\n\n")
-        self.log_to_detailed(f"**User Prompt:**\n\n```\n{prompt}\n```\n\n")
+        self.log_to_detailed(f"**SYSTEM PROMPT:**\n\n```\n{system_prompt}\n```\n\n")
+        self.log_to_detailed(f"**USER PROMPT:**\n\n```\n{prompt}\n```\n\n")
         
         # Update the debug prompt display
         self.root.after(0, lambda: self.update_debug_prompt(f"System prompt:\n{system_prompt}\n\n---\n\nUser prompt:\n{prompt}"))
@@ -1387,10 +1386,10 @@ class HabermasMachine:
             
             # Get and validate max group size
             try:
-                max_group_size = min(9, max(2, int(self.max_group_size_var.get())))
+                max_group_size = max(2, int(self.max_group_size_var.get()))
             except ValueError:
-                max_group_size = 9
-                self.max_group_size_var.set("9")
+                max_group_size = 12
+                self.max_group_size_var.set("12")
             
             # Get voting strategy
             voting_strategy = self.voting_strategy_var.get()

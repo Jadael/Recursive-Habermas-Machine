@@ -1,2 +1,5 @@
 /output
 /tests
+*.md
+Habermas Machine.pdf
+/__pycache__
