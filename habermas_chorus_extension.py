@@ -10,6 +10,7 @@ import numpy as np
 import os
 from PIL import Image, ImageTk
 import re
+import requests
 
 class HabermasChorusExtension:
     """Extension class that adds Chorus functionality to the Habermas Machine"""
@@ -22,26 +23,38 @@ class HabermasChorusExtension:
         
         # Default Chorus prompt templates
         self.default_chorus_templates = {
-            "response_simulation": "You are simulating how an associate would respond to a proposed workplace policy based on their value statement.\n\n"
-                                  "Associate's Value Statement:\n{value_statement}\n\n"
-                                  "Associate's Department: {department}\n"
-                                  "Associate's Role: {role}\n"
-                                  "Associate's Location: {location}\n\n"
-                                  "Proposed Policy:\n{proposal_title}\n{proposal_description}\n\n"
-                                  "Based SOLELY on the associate's value statement and metadata, simulate how they would respond to this proposal. Include:\n"
-                                  "1. Their general sentiment (favorable, neutral, or unfavorable)\n"
-                                  "2. A 1-10 score representing their level of support (10 being highest)\n"
-                                  "3. Their specific concerns, if any\n"
-                                  "4. Their suggestions for improvement, if any\n"
-                                  "5. A short statement in their voice expressing their reaction\n\n"
-                                  "Return your response as a JSON object with the following structure:\n"
-                                  "{\n"
-                                  '  "sentiment": "favorable|neutral|unfavorable",\n'
-                                  '  "score": 7.5,\n'
-                                  '  "concerns": ["concern 1", "concern 2"],\n'
-                                  '  "suggestions": ["suggestion 1", "suggestion 2"],\n'
-                                  '  "statement": "Their simulated response statement"\n'
-                                  "}\n"
+            "response_simulation": """You are simulating how an associate would respond to a proposed workplace policy based on their value statement.
+
+Associate's Value Statement:
+{value_statement}
+
+Associate's Department: {department}
+Associate's Role: {role}
+Associate's Location: {location}
+
+Proposed Policy:
+Title: {proposal_title}
+Description: {proposal_description}
+
+Based SOLELY on the associate's value statement and metadata, simulate how they would respond to this proposal. 
+
+Your response MUST be formatted as a valid JSON object with the following structure:
+{{
+  "sentiment": "favorable|neutral|unfavorable",
+  "score": 7.5,
+  "concerns": ["concern 1", "concern 2"],
+  "suggestions": ["suggestion 1", "suggestion 2"],
+  "statement": "Their simulated response statement"
+}}
+
+Where:
+- sentiment: Must be exactly one of: "favorable", "neutral", or "unfavorable"
+- score: A number from 1-10 representing level of support (10 being highest)
+- concerns: An array of specific concerns, if any (can be empty array [])
+- suggestions: An array of suggestions for improvement, if any (can be empty array [])
+- statement: A 1-3 sentence response in their voice expressing their reaction
+
+IMPORTANT: Your entire response must be ONLY the JSON object, with no additional text before or after."""
         }
         
         # Create chorus templates that will be edited
@@ -514,10 +527,32 @@ class HabermasChorusExtension:
             # Update status
             self.app.root.after(0, lambda: self.chorus_status_var.set(f"Processing 0/{total_statements}..."))
             
+            # Switch to the right tab to see the live updates
+            self.app.right_column.lift()
+            
             # Process each value statement to generate simulated response
             for value_statement in filtered_statements:
                 if self.app.stop_event.is_set():
                     break
+                
+                # First update the LLM prompt panel to show what we're about to do
+                resp_template = self.chorus_templates["response_simulation"]
+                prompt = resp_template.format(
+                    value_statement=value_statement["statement"],
+                    department=value_statement["department"],
+                    role=value_statement["role"],
+                    location=value_statement["location"],
+                    proposal_title=proposal_title,
+                    proposal_description=proposal_text
+                )
+                
+                # Update debug prompt display
+                self.app.root.after(0, lambda p=prompt: self.app.update_debug_prompt(p))
+                self.app.root.after(0, lambda: self.app.response_text.delete("1.0", "end"))
+                self.app.root.after(0, lambda: self.app.flash_textbox(self.app.prompt_text))
+                
+                # Artificial pause to let the user see the prompt change
+                time.sleep(0.5)
                 
                 # Generate simulated response using the LLM and Habermas template system
                 response = self.generate_simulated_response(value_statement, proposal_title, proposal_text)
@@ -528,6 +563,9 @@ class HabermasChorusExtension:
                 processed += 1
                 self.app.root.after(0, lambda p=processed, t=total_statements: 
                                    self.chorus_status_var.set(f"Processing {p}/{t}..."))
+                
+                # Artificial pause to let the user see the response before moving to next
+                time.sleep(0.5)
             
             # Update UI with actual results
             self.app.root.after(0, lambda: self.update_chorus_results(proposal_title, proposal_text))
@@ -541,11 +579,8 @@ class HabermasChorusExtension:
     def generate_simulated_response(self, value_statement, proposal_title, proposal_text):
         """Generate a simulated response using the LLM"""
         try:
-            # Get the template
-            template = self.chorus_templates["response_simulation"]
-            
             # Format the prompt
-            prompt = template.format(
+            prompt = self.chorus_templates["response_simulation"].format(
                 value_statement=value_statement["statement"],
                 department=value_statement["department"],
                 role=value_statement["role"],
@@ -557,9 +592,6 @@ class HabermasChorusExtension:
             # Log the prompt for debugging
             self.app.log_to_detailed(f"**Simulating response for {value_statement['department']}, {value_statement['role']} associate**\n\n")
             self.app.log_to_detailed(f"**Prompt:**\n```\n{prompt}\n```\n\n")
-            
-            # Update the debug prompt display
-            self.app.root.after(0, lambda: self.app.update_debug_prompt(prompt))
             
             # Prepare API call parameters
             model = self.app.model_var.get()
@@ -595,6 +627,7 @@ class HabermasChorusExtension:
                     # For the demo, fall back to mock data if API fails
                     return self.generate_mock_response(value_statement)
                 
+                # This is the key part - display the streamed response
                 full_response = ""
                 for line in self.app.current_response.iter_lines():
                     if self.app.stop_event.is_set():
@@ -602,14 +635,21 @@ class HabermasChorusExtension:
                         
                     if line:
                         try:
-                            data = json.loads(line)
+                            data = json.loads(line.decode('utf-8'))
                             if 'response' in data:
                                 # Handle streamed text
                                 response_text = data['response']
                                 full_response += response_text
                                 
-                                # Update the debug response display
+                                # This is the critical part - update the debug response display
+                                # in real time as the text comes in
                                 self.app.root.after(0, lambda r=full_response: self.app.update_debug_response(r))
+                                
+                                # Also make debug panel visible and flash it to draw attention
+                                self.app.root.after(0, lambda: self.app.flash_textbox(self.app.response_text))
+                                
+                                # Process UI events to ensure display updates
+                                self.app.root.update_idletasks()
                         except json.JSONDecodeError:
                             self.app.log_to_detailed("**Error:** Failed to decode response from Ollama API\n\n")
                 
@@ -621,26 +661,61 @@ class HabermasChorusExtension:
                 
                 # Parse the JSON response
                 try:
-                    # Try to find a JSON object within the text
-                    match = re.search(r'({[\s\S]*?})', clean_response)
+                    # Try to find a JSON object within the text using more robust regex
+                    match = re.search(r'(\{[\s\S]*\})', clean_response)
                     if match:
                         json_str = match.group(1)
-                        response_data = json.loads(json_str)
+                        # Debug the JSON string
+                        self.app.log_to_detailed(f"**JSON string to parse:**\n```\n{json_str}\n```\n\n")
                         
-                        # Add metadata for easier processing
-                        response_data["department"] = value_statement["department"]
-                        response_data["role"] = value_statement["role"]
-                        response_data["location"] = value_statement["location"]
+                        # Clean the JSON string - this is critical for parsing
+                        json_str = json_str.strip()
                         
-                        self.app.log_to_detailed(f"**Parsed response:** Successfully extracted JSON\n\n")
-                        return response_data
+                        # Try to parse the JSON
+                        try:
+                            response_data = json.loads(json_str)
+                            
+                            # Add metadata for easier processing
+                            response_data["department"] = value_statement["department"]
+                            response_data["role"] = value_statement["role"]
+                            response_data["location"] = value_statement["location"]
+                            
+                            self.app.log_to_detailed(f"**USING REAL LLM RESPONSE - Successfully extracted JSON**\n\n")
+                            return response_data
+                        except json.JSONDecodeError as e:
+                            self.app.log_to_detailed(f"**JSON parsing error on final object:** {str(e)}\n\n")
+                            self.app.log_to_detailed(f"**Error at position {e.pos}:** Character '{json_str[e.pos]}'\n\n")
+                            
+                            # Try a more manual approach to clean problematic JSON
+                            try:
+                                # Use ast.literal_eval as a fallback
+                                import ast
+                                # Try to clean up the JSON string
+                                cleaned_json_str = json_str.replace("'", '"').replace("\n", "").strip()
+                                response_data = ast.literal_eval(cleaned_json_str)
+                                
+                                # Convert to proper dict if needed
+                                if not isinstance(response_data, dict):
+                                    response_data = dict(response_data)
+                                
+                                # Add metadata
+                                response_data["department"] = value_statement["department"]
+                                response_data["role"] = value_statement["role"]
+                                response_data["location"] = value_statement["location"]
+                                
+                                self.app.log_to_detailed(f"**USING REAL LLM RESPONSE - Recovered with ast.literal_eval**\n\n")
+                                return response_data
+                            except Exception as ast_error:
+                                self.app.log_to_detailed(f"**AST parsing error:** {str(ast_error)}\n\n")
+                                # Fall back to mock data as last resort
+                                return self.generate_mock_response(value_statement)
                     else:
                         self.app.log_to_detailed("**Error:** No JSON object found in response\n\n")
                         # Fall back to mock data for demo purposes
                         return self.generate_mock_response(value_statement)
                 
-                except json.JSONDecodeError as e:
-                    self.app.log_to_detailed(f"**JSON parsing error:** {str(e)}\n\n")
+                except Exception as e:
+                    self.app.log_to_detailed(f"**Error processing response:** {str(e)}\n\n")
                     # Fall back to mock data for demo purposes
                     return self.generate_mock_response(value_statement)
                     
