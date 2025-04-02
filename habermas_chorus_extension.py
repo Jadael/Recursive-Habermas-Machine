@@ -11,6 +11,7 @@ import os
 from PIL import Image, ImageTk
 import re
 import requests
+import traceback
 
 class HabermasChorusExtension:
     """Extension class that adds Chorus functionality to the Habermas Machine"""
@@ -165,8 +166,8 @@ IMPORTANT: Your entire response must be ONLY the JSON object, with no additional
         self.proposal_text.pack(fill="x", padx=10, pady=(0, 5))
         
         # Default text for demo
-        self.proposal_title.insert(0, "End Remote Work")
-        self.proposal_text.insert("1.0", "We are considering a 'no remote work' policy where associates would be required to work in the office, with remote work reserved only for emergencies and business travel. This would begin tomorrow.")
+        self.proposal_title.insert(0, "New Work Policy Proposal")
+        self.proposal_text.insert("1.0", "This proposal aims to update our current workplace policies to better align with organizational goals and employee needs. Please provide your feedback based on your values and perspectives.")
         
         # Filter options
         filter_frame = ctk.CTkFrame(proposal_frame)
@@ -539,7 +540,7 @@ IMPORTANT: Your entire response must be ONLY the JSON object, with no additional
             
             if not filtered_statements:
                 self.app.root.after(0, lambda: tk.messagebox.showinfo("No Matching Statements", 
-                                                                     "No statements match the selected filters. Try different criteria."))
+                                                                    "No statements match the selected filters. Try different criteria."))
                 self.app.root.after(0, lambda: self.chorus_status_var.set("Ready"))
                 return
                 
@@ -577,7 +578,7 @@ IMPORTANT: Your entire response must be ONLY the JSON object, with no additional
                 # Artificial pause to let the user see the prompt change
                 time.sleep(0.5)
                 
-                # Generate simulated response using the LLM and Habermas template system
+                # Generate simulated response using the LLM
                 response = self.generate_simulated_response(value_statement, proposal_title, proposal_text)
                 if response:
                     self.simulation_results.append(response)
@@ -590,12 +591,19 @@ IMPORTANT: Your entire response must be ONLY the JSON object, with no additional
                 # Artificial pause to let the user see the response before moving to next
                 time.sleep(0.5)
             
-            # Update UI with actual results
+            # Update UI with results
             self.app.root.after(0, lambda: self.update_chorus_results(proposal_title, proposal_text))
             
         except Exception as e:
-            print(f"Error in chorus simulation: {str(e)}")
-            self.app.log_to_detailed(f"**Error in chorus simulation:** {str(e)}\n\n")
+            error_msg = f"Error in chorus simulation: {str(e)}"
+            print(error_msg)
+            print(traceback.format_exc())
+            self.app.log_to_detailed(f"**Error in chorus simulation:** {error_msg}\n\n")
+            self.app.log_to_detailed(f"**Traceback:**\n```\n{traceback.format_exc()}\n```\n\n")
+            
+            # Display error in UI
+            self.app.root.after(0, lambda: self.summary_text.delete("1.0", "end"))
+            self.app.root.after(0, lambda: self.summary_text.insert("1.0", f"# Error in Simulation\n\nAn error occurred: {error_msg}\n\nPlease check that Ollama is running correctly and try again."))
         finally:
             self.app.root.after(0, lambda: self.chorus_status_var.set("Complete"))
             
@@ -647,10 +655,11 @@ IMPORTANT: Your entire response must be ONLY the JSON object, with no additional
                 if self.app.current_response.status_code != 200:
                     error_msg = f"API Error: Status code {self.app.current_response.status_code}"
                     self.app.log_to_detailed(f"**Error:** {error_msg}\n\n")
-                    # For the demo, fall back to mock data if API fails
-                    return self.generate_mock_response(value_statement)
+                    self.app.root.after(0, lambda: self.summary_text.delete("1.0", "end"))
+                    self.app.root.after(0, lambda: self.summary_text.insert("1.0", f"# API Connection Error\n\n{error_msg}\n\nPlease check that Ollama is running correctly and try again."))
+                    return None
                 
-                # This is the key part - display the streamed response
+                # Process the streamed response
                 full_response = ""
                 for line in self.app.current_response.iter_lines():
                     if self.app.stop_event.is_set():
@@ -664,11 +673,10 @@ IMPORTANT: Your entire response must be ONLY the JSON object, with no additional
                                 response_text = data['response']
                                 full_response += response_text
                                 
-                                # This is the critical part - update the debug response display
-                                # in real time as the text comes in
+                                # Update the debug response display in real time
                                 self.app.root.after(0, lambda r=full_response: self.app.update_debug_response(r))
                                 
-                                # Also make debug panel visible and flash it to draw attention
+                                # Make debug panel visible and flash it to draw attention
                                 self.app.root.after(0, lambda: self.app.flash_textbox(self.app.response_text))
                                 
                                 # Process UI events to ensure display updates
@@ -703,8 +711,56 @@ IMPORTANT: Your entire response must be ONLY the JSON object, with no additional
                             response_data["role"] = value_statement["role"]
                             response_data["location"] = value_statement["location"]
                             
-                            self.app.log_to_detailed(f"**USING REAL LLM RESPONSE - Successfully extracted JSON**\n\n")
+                            # Validate the required fields are present
+                            required_fields = ["sentiment", "score", "concerns", "suggestions", "statement"]
+                            for field in required_fields:
+                                if field not in response_data:
+                                    self.app.log_to_detailed(f"**Warning: Missing required field '{field}' in response data**\n\n")
+                                    
+                                    # Add default empty values for missing fields
+                                    if field in ["concerns", "suggestions"]:
+                                        response_data[field] = []
+                                    elif field == "sentiment":
+                                        response_data[field] = "neutral"
+                                    elif field == "score":
+                                        response_data[field] = 5.0
+                                    elif field == "statement":
+                                        response_data[field] = "(No response statement provided)"
+                            
+                            # Ensure sentiment is one of the allowed values
+                            if response_data["sentiment"] not in ["favorable", "neutral", "unfavorable"]:
+                                self.app.log_to_detailed(f"**Warning: Invalid sentiment '{response_data['sentiment']}', defaulting to 'neutral'**\n\n")
+                                response_data["sentiment"] = "neutral"
+                                
+                            # Ensure score is a number between 1-10
+                            try:
+                                score = float(response_data["score"])
+                                if score < 1 or score > 10:
+                                    self.app.log_to_detailed(f"**Warning: Score {score} outside valid range (1-10), clamping**\n\n")
+                                    response_data["score"] = max(1, min(10, score))
+                            except (ValueError, TypeError):
+                                self.app.log_to_detailed(f"**Warning: Invalid score value, defaulting to 5.0**\n\n")
+                                response_data["score"] = 5.0
+                            
+                            # Ensure concerns and suggestions are lists
+                            for field in ["concerns", "suggestions"]:
+                                if not isinstance(response_data[field], list):
+                                    self.app.log_to_detailed(f"**Warning: '{field}' is not a list, converting**\n\n")
+                                    if isinstance(response_data[field], str):
+                                        # Try to convert a string to a list if it looks like one
+                                        if response_data[field].startswith("[") and response_data[field].endswith("]"):
+                                            try:
+                                                response_data[field] = json.loads(response_data[field])
+                                            except:
+                                                response_data[field] = [response_data[field]]
+                                        else:
+                                            response_data[field] = [response_data[field]]
+                                    else:
+                                        response_data[field] = []
+                            
+                            self.app.log_to_detailed(f"**Successfully extracted and validated response data**\n\n")
                             return response_data
+                            
                         except json.JSONDecodeError as e:
                             self.app.log_to_detailed(f"**JSON parsing error on final object:** {str(e)}\n\n")
                             self.app.log_to_detailed(f"**Error at position {e.pos}:** Character '{json_str[e.pos]}'\n\n")
@@ -726,128 +782,50 @@ IMPORTANT: Your entire response must be ONLY the JSON object, with no additional
                                 response_data["role"] = value_statement["role"]
                                 response_data["location"] = value_statement["location"]
                                 
-                                self.app.log_to_detailed(f"**USING REAL LLM RESPONSE - Recovered with ast.literal_eval**\n\n")
+                                self.app.log_to_detailed(f"**Recovered with ast.literal_eval**\n\n")
                                 return response_data
                             except Exception as ast_error:
                                 self.app.log_to_detailed(f"**AST parsing error:** {str(ast_error)}\n\n")
-                                # Fall back to mock data as last resort
-                                return self.generate_mock_response(value_statement)
+                                self.app.root.after(0, lambda: tk.messagebox.showerror(
+                                    "JSON Parsing Error", 
+                                    f"Could not parse LLM response for {value_statement['role']} in {value_statement['department']}.\n\nSkipping this response."
+                                ))
+                                return None
                     else:
                         self.app.log_to_detailed("**Error:** No JSON object found in response\n\n")
-                        # Fall back to mock data for demo purposes
-                        return self.generate_mock_response(value_statement)
+                        self.app.root.after(0, lambda: tk.messagebox.showerror(
+                            "JSON Response Error", 
+                            f"LLM did not return proper JSON format for {value_statement['role']} in {value_statement['department']}.\n\nSkipping this response."
+                        ))
+                        return None
                 
                 except Exception as e:
                     self.app.log_to_detailed(f"**Error processing response:** {str(e)}\n\n")
-                    # Fall back to mock data for demo purposes
-                    return self.generate_mock_response(value_statement)
+                    self.app.log_to_detailed(f"**Traceback:**\n```\n{traceback.format_exc()}\n```\n\n")
+                    return None
                     
             except Exception as e:
                 error_msg = f"Error generating response: {str(e)}"
                 self.app.log_to_detailed(f"**Error:** {error_msg}\n\n")
-                # Fall back to mock data for demo purposes
-                return self.generate_mock_response(value_statement)
+                self.app.log_to_detailed(f"**Traceback:**\n```\n{traceback.format_exc()}\n```\n\n")
+                return None
             finally:
                 self.app.current_response = None
                 
         except Exception as e:
             self.app.log_to_detailed(f"**Error in simulate_response:** {str(e)}\n\n")
-            # Fall back to mock data for demo purposes
-            return self.generate_mock_response(value_statement)
-    
-    def generate_mock_response(self, value_statement):
-        """Generate a mock response for demo purposes if LLM fails"""
-        # Create a mock response based on value statement content
-        # This helps ensure the demo still works if Ollama isn't available
-        mock_data = {
-            "department": value_statement["department"],
-            "role": value_statement["role"],
-            "location": value_statement["location"]
-        }
-        
-        # Analyze value statement for keywords to determine mock sentiment
-        statement_lower = value_statement["statement"].lower()
-        
-        # Check for keywords that might indicate preferences
-        if "remote" in statement_lower and "essential" in statement_lower:
-            sentiment = "unfavorable"
-            score = 2.5
-        elif "balance" in statement_lower and "flexibility" in statement_lower:
-            sentiment = "neutral"
-            score = 5.0
-        elif "in-person" in statement_lower or "office space" in statement_lower:
-            sentiment = "favorable"
-            score = 7.5
-        else:
-            # Random with weighted distribution
-            sentiment_options = ["favorable", "neutral", "unfavorable"]
-            sentiment = random.choices(sentiment_options, weights=[0.4, 0.3, 0.3])[0]
-            
-            if sentiment == "favorable":
-                score = random.uniform(6.5, 9.0)
-            elif sentiment == "neutral":
-                score = random.uniform(4.0, 6.5)
-            else:
-                score = random.uniform(1.0, 4.0)
-        
-        # Common concerns based on role and location
-        concerns = []
-        if value_statement["location"] == "Remote":
-            concerns.append("Significant change to current working arrangement")
-        
-        if "commute" in statement_lower or "45 minutes" in statement_lower:
-            concerns.append("Long commute times")
-        
-        if "caregiv" in statement_lower:
-            concerns.append("Caregiving responsibilities")
-            
-        # Add random general concerns if none specific were found
-        if not concerns:
-            possible_concerns = [
-                "Work-life balance impact", 
-                "Team coordination challenges",
-                "Office space limitations",
-                "Productivity concerns"
-            ]
-            concerns = random.sample(possible_concerns, k=min(2, len(possible_concerns)))
-            
-        # Generate suggestions
-        suggestions = []
-        if sentiment != "favorable":
-            suggestions = [
-                "Allow flexible scheduling of in-office days",
-                "Reduce required office days to 2 per week"
-            ]
-            
-        # Create mock response statement
-        if sentiment == "favorable":
-            statement = f"I support the hybrid work policy as it aligns with my values around {random.choice(['collaboration', 'team cohesion', 'office utilization'])}. The balance of 3 days in-office seems reasonable."
-        elif sentiment == "neutral":
-            statement = f"I see both benefits and drawbacks to this policy. While I value in-person collaboration, I'm concerned about {concerns[0] if concerns else 'the lack of flexibility'}."
-        else:
-            statement = f"I have significant concerns about this policy, particularly regarding {concerns[0] if concerns else 'work-life balance'}. I would strongly prefer more flexibility or fewer required in-office days."
-            
-        # Assemble complete mock response
-        mock_data.update({
-            "sentiment": sentiment,
-            "score": round(score, 1),
-            "concerns": concerns,
-            "suggestions": suggestions,
-            "statement": statement
-        })
-        
-        self.app.log_to_detailed("**Using mock response due to API/parsing failure**\n\n")
-        return mock_data
+            self.app.log_to_detailed(f"**Traceback:**\n```\n{traceback.format_exc()}\n```\n\n")
+            return None
     
     def update_chorus_results(self, proposal_title, proposal_text):
-        """Update the chorus results with actual simulation data"""
+        """Update the chorus results with simulation data"""
         if not self.simulation_results:
             # If no results, show error message
             self.summary_text.delete("1.0", "end")
-            self.summary_text.insert("1.0", "# No Results\n\nThe simulation did not produce any results. Please try again.")
+            self.summary_text.insert("1.0", "# No Results\n\nThe simulation did not produce any results. Please try again with different parameters or check if Ollama is running correctly.")
             return
             
-        # Calculate statistics from actual results
+        # Calculate statistics from results
         total = len(self.simulation_results)
         favorable = sum(1 for r in self.simulation_results if r.get("sentiment") == "favorable")
         neutral = sum(1 for r in self.simulation_results if r.get("sentiment") == "neutral")
@@ -865,6 +843,7 @@ IMPORTANT: Your entire response must be ONLY the JSON object, with no additional
                 
         concern_counts = {}
         for concern in all_concerns:
+            concern = concern.strip()
             if concern in concern_counts:
                 concern_counts[concern] += 1
             else:
@@ -873,30 +852,55 @@ IMPORTANT: Your entire response must be ONLY the JSON object, with no additional
         # Get top concerns
         top_concerns = sorted(concern_counts.items(), key=lambda x: x[1], reverse=True)[:4]
         
-        # Calculate average scores by location
+        # Calculate average scores by demographic factors
         location_scores = {}
+        department_scores = {}
+        role_scores = {}
+        
         for result in self.simulation_results:
             location = result.get("location", "Unknown")
+            department = result.get("department", "Unknown")
+            role = result.get("role", "Unknown")
             score = result.get("score", 5.0)
             
             if location not in location_scores:
                 location_scores[location] = []
-                
             location_scores[location].append(score)
             
+            if department not in department_scores:
+                department_scores[department] = []
+            department_scores[department].append(score)
+            
+            if role not in role_scores:
+                role_scores[role] = []
+            role_scores[role].append(score)
+            
         avg_location_scores = {loc: sum(scores)/len(scores) for loc, scores in location_scores.items()}
+        avg_department_scores = {dept: sum(scores)/len(scores) for dept, scores in department_scores.items()}
+        avg_role_scores = {role: sum(scores)/len(scores) for role, scores in role_scores.items()}
         
-        # Generate key insight based on data
-        key_insight = ""
+        # Analyze for significant differences between demographics
+        key_insights = []
+        
+        # Check for location disparities
         if len(avg_location_scores) > 1:
             max_loc = max(avg_location_scores.items(), key=lambda x: x[1])
             min_loc = min(avg_location_scores.items(), key=lambda x: x[1])
             
             if max_loc[1] - min_loc[1] > 2:
-                key_insight = f"Location-based disparities emerged as a significant issue, with {max_loc[0]} associates (avg. score: {max_loc[1]:.1f}) being more supportive than {min_loc[0]} associates (avg. score: {min_loc[1]:.1f})."
+                key_insights.append(f"Significant disparity between {max_loc[0]} associates (avg. score: {max_loc[1]:.1f}) and {min_loc[0]} associates (avg. score: {min_loc[1]:.1f}).")
         
-        if not key_insight and top_concerns:
-            key_insight = f"The most significant concern was '{top_concerns[0][0]}', mentioned by {top_concerns[0][1]} associates."
+        # Check for department disparities
+        if len(avg_department_scores) > 1:
+            max_dept = max(avg_department_scores.items(), key=lambda x: x[1])
+            min_dept = min(avg_department_scores.items(), key=lambda x: x[1])
+            
+            if max_dept[1] - min_dept[1] > 2:
+                key_insights.append(f"{max_dept[0]} department (avg. score: {max_dept[1]:.1f}) significantly more favorable than {min_dept[0]} department (avg. score: {min_dept[1]:.1f}).")
+        
+        # Add insight about top concern if we have any
+        if top_concerns:
+            key_insights.append(f"The most significant concern was '{top_concerns[0][0]}', mentioned by {top_concerns[0][1]} associates.")
         
         # Generate the summary text
         summary_text = f"""
@@ -913,13 +917,18 @@ Based on simulated responses from {total} associates, the proposal received **{'
 """
 
         # Add top concerns
-        for i, (concern, count) in enumerate(top_concerns[:4], 1):
-            concern_pct = round((count / total) * 100)
-            summary_text += f"{i}. {concern} ({concern_pct}%)\n"
+        if top_concerns:
+            for i, (concern, count) in enumerate(top_concerns, 1):
+                concern_pct = round((count / total) * 100)
+                summary_text += f"{i}. {concern} ({concern_pct}%)\n"
+        else:
+            summary_text += "No specific concerns were frequently mentioned.\n"
             
-        # Add key insight if available
-        if key_insight:
-            summary_text += f"\n## Key Insight:\n{key_insight}\n"
+        # Add key insights if available
+        if key_insights:
+            summary_text += f"\n## Key Insights:\n"
+            for insight in key_insights:
+                summary_text += f"- {insight}\n"
             
         # Add a sample quote from the results
         if self.simulation_results:
@@ -1237,93 +1246,89 @@ Based on simulated responses from {total} associates, the proposal received **{'
                 suggestion_counts[suggestion] += 1
             else:
                 suggestion_counts[suggestion] = 1
+                
+        if not suggestion_counts:
+            self.suggestions_text.delete("1.0", "end")
+            self.suggestions_text.insert("1.0", "# No Suggestions\n\nNo specific suggestions were provided in the feedback.")
+            return
         
-        # Group similar suggestions using keyword matching
-        grouped_suggestions = {
-            "Flexibility": [],
-            "Implementation": [],
-            "Commute": [],
-            "Accommodation": [],
-            "Technology": [],
-            "Other": []
-        }
+        # Identify common keywords in suggestions to create categories dynamically
+        keywords = {}
+        for suggestion in suggestion_counts.keys():
+            suggestion_lower = suggestion.lower()
+            words = re.findall(r'\b\w+\b', suggestion_lower)
+            for word in words:
+                if len(word) > 3:  # Only consider words longer than 3 characters
+                    if word in keywords:
+                        keywords[word] += 1
+                    else:
+                        keywords[word] = 1
         
+        # Find top keywords to use as categories
+        top_keywords = sorted(keywords.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_keywords = [k for k, v in top_keywords if v > 1]  # Only use keywords that appear multiple times
+        
+        # Create categories dynamically based on common keywords
+        categories = {}
+        for keyword in top_keywords:
+            categories[keyword.title()] = []
+        
+        # Add an "Other" category
+        categories["Other"] = []
+        
+        # Group suggestions into categories
         for suggestion, count in suggestion_counts.items():
             suggestion_lower = suggestion.lower()
-            if any(keyword in suggestion_lower for keyword in ["flexible", "flexibility", "schedule", "choice"]):
-                grouped_suggestions["Flexibility"].append((suggestion, count))
-            elif any(keyword in suggestion_lower for keyword in ["phased", "gradual", "pilot", "trial"]):
-                grouped_suggestions["Implementation"].append((suggestion, count))
-            elif any(keyword in suggestion_lower for keyword in ["commute", "traffic", "transit", "travel"]):
-                grouped_suggestions["Commute"].append((suggestion, count))
-            elif any(keyword in suggestion_lower for keyword in ["accommodation", "exempt", "exception"]):
-                grouped_suggestions["Accommodation"].append((suggestion, count))
-            elif any(keyword in suggestion_lower for keyword in ["technology", "equipment", "tool"]):
-                grouped_suggestions["Technology"].append((suggestion, count))
-            else:
-                grouped_suggestions["Other"].append((suggestion, count))
+            
+            # Check which category this suggestion fits into
+            categorized = False
+            for keyword in top_keywords:
+                if keyword in suggestion_lower:
+                    categories[keyword.title()].append((suggestion, count))
+                    categorized = True
+                    break
+                    
+            # If not categorized, put in "Other"
+            if not categorized:
+                categories["Other"].append((suggestion, count))
+        
+        # Remove empty categories
+        categories = {k: v for k, v in categories.items() if v}
         
         # Identify top suggestion and generate key recommendation
         top_suggestion = max(suggestion_counts.items(), key=lambda x: x[1], default=("", 0))
+        
+        # Generate a dynamic key recommendation based on the data
         key_recommendation = ""
-        
-        # Check for common themes in suggestions
-        reduced_days = any("2 day" in s.lower() or "fewer day" in s.lower() or "reduce day" in s.lower() 
-                          for s in suggestion_counts.keys())
-        
-        flexible_schedule = any("flexib" in s.lower() for s in suggestion_counts.keys())
-        
-        if reduced_days and flexible_schedule:
-            key_recommendation = "The data suggests modifying the policy to **2 required in-office days** with additional flexible days coordinated at the team level would significantly increase favorability while maintaining the benefits of in-office collaboration."
-        elif reduced_days:
-            key_recommendation = "Consider reducing the required in-office days from 3 to 2 per week, as this was the most frequent suggestion across departments."
-        elif flexible_schedule:
-            key_recommendation = "Consider allowing more flexibility in which days associates come to the office rather than mandating specific days for everyone."
-        elif top_suggestion[0]:
-            key_recommendation = f"The most common suggestion was: {top_suggestion[0]}"
+        if top_suggestion[0]:
+            # Calculate what percentage of responses included this suggestion
+            suggestion_percentage = round((top_suggestion[1] / len(self.simulation_results)) * 100)
+            key_recommendation = f"The most frequent suggestion ({suggestion_percentage}% of responses) was: \"{top_suggestion[0]}\""
             
         # Generate suggestions text
         suggestions_text = "# Improvement Suggestions\n\n"
-        suggestions_text += "Based on the simulated feedback, here are key suggestions to improve associate reception:\n\n"
         
-        # Add categorized suggestions
-        section_count = 1
-        for category, suggestions in grouped_suggestions.items():
-            if suggestions:
-                suggestions.sort(key=lambda x: x[1], reverse=True)
-                suggestions_text += f"## {section_count}. {category} Recommendations\n"
-                for suggestion, count in suggestions[:3]:  # Top 3 per category
-                    percentage = round((count / len(self.simulation_results)) * 100)
-                    suggestions_text += f"- **{suggestion}** ({percentage}% of respondents)\n"
-                suggestions_text += "\n"
-                section_count += 1
-        
-        # Add key recommendation if available
-        if key_recommendation:
-            suggestions_text += "## Key Recommendation\n"
-            suggestions_text += key_recommendation + "\n"
+        if all_suggestions:
+            suggestions_text += "Based on the simulated feedback, here are key suggestions to improve reception:\n\n"
+            
+            # Add categorized suggestions
+            section_count = 1
+            for category, suggestions in categories.items():
+                if suggestions:
+                    suggestions.sort(key=lambda x: x[1], reverse=True)
+                    suggestions_text += f"## {section_count}. {category} Recommendations\n"
+                    for suggestion, count in suggestions[:3]:  # Top 3 per category
+                        percentage = round((count / len(self.simulation_results)) * 100)
+                        suggestions_text += f"- **{suggestion}** ({percentage}% of respondents)\n"
+                    suggestions_text += "\n"
+                    section_count += 1
+            
+            # Add key recommendation if available
+            if key_recommendation:
+                suggestions_text += "## Key Recommendation\n"
+                suggestions_text += key_recommendation + "\n"
+        else:
+            suggestions_text += "No specific suggestions were provided in the feedback responses."
         
         self.suggestions_text.delete("1.0", "end")
         self.suggestions_text.insert("1.0", suggestions_text)
-
-# Helper methods for implementing Chorus with LLM
-def generate_simulated_response(statement, proposal, model, temperature=0.7):
-    """
-    Generate a simulated response from an associate based on their value statement and a proposal
-    
-    In a real implementation, this would:
-    1. Use the LLM to predict how the associate would respond
-    2. Include sentiment analysis
-    3. Extract key concerns and suggestions
-    
-    For demo purposes, this returns mock data
-    """
-    # Mock implementation
-    # In a real version, this would use the app.make_api_call method
-    mock_responses = [
-        {"sentiment": "favorable", "concerns": [], "suggestions": []},
-        {"sentiment": "neutral", "concerns": ["commute time"], "suggestions": ["flexible days"]},
-        {"sentiment": "unfavorable", "concerns": ["work-life balance", "childcare"], "suggestions": ["reduce days"]}
-    ]
-    
-    return random.choice(mock_responses)

@@ -71,11 +71,23 @@ def main():
         root = ctk.CTk()
         root.protocol("WM_DELETE_WINDOW", lambda: (root.quit(), root.destroy()))
         
+        # Set window title and size
+        root.title("Habermas Machine with Chorus Extension")
+        root.geometry("1800x900")
+        
         # Set up the main Habermas Machine
         app = HabermasMachine(root)
         
         # Add the Chorus extension
         chorus_extension = HabermasChorusExtension(app)
+        
+        # Display startup message
+        messagebox.showinfo(
+            "Habermas Machine with Chorus Extension",
+            "Welcome to the Habermas Machine with Chorus Extension.\n\n"
+            "This tool combines consensus-building with stakeholder feedback analysis.\n\n"
+            "Make sure Ollama is running with a suitable LLM (e.g., DeepSeek-R1) before proceeding."
+        )
         
         # Start the main loop
         root.mainloop()
