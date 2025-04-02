@@ -21,6 +21,7 @@ class HabermasChorusExtension:
         self.app = habermas_machine
         self.value_statements = []
         self.sample_statements_loaded = False
+        self.filter_initialized = False
         
         # Default Chorus prompt templates
         self.default_chorus_templates = {
@@ -175,29 +176,42 @@ IMPORTANT: Your entire response must be ONLY the JSON object, with no additional
         
         ctk.CTkLabel(filter_frame, text="Filter by:", font=("Arial", 12)).pack(side="left", padx=10)
         
+        # Initialize filter variables
         self.dept_var = ctk.StringVar(value="All Departments")
-        dept_dropdown = ctk.CTkOptionMenu(
-            filter_frame, 
-            variable=self.dept_var,
-            values=["All Departments", "Customer Service", "IT", "HR", "Finance", "Operations"]
-        )
-        dept_dropdown.pack(side="left", padx=10)
-        
         self.role_var = ctk.StringVar(value="All Roles")
-        role_dropdown = ctk.CTkOptionMenu(
-            filter_frame, 
-            variable=self.role_var,
-            values=["All Roles", "Associate", "Team Lead", "Manager", "Director"]
-        )
-        role_dropdown.pack(side="left", padx=10)
-        
         self.location_var = ctk.StringVar(value="All Locations")
-        location_dropdown = ctk.CTkOptionMenu(
-            filter_frame, 
-            variable=self.location_var,
-            values=["All Locations", "HQ", "Regional Offices", "Remote"]
+        
+        # Create dropdown frames to allow us to update them later
+        self.dept_dropdown_frame = ctk.CTkFrame(filter_frame)
+        self.dept_dropdown_frame.pack(side="left", padx=10)
+        
+        self.role_dropdown_frame = ctk.CTkFrame(filter_frame)
+        self.role_dropdown_frame.pack(side="left", padx=10)
+        
+        self.location_dropdown_frame = ctk.CTkFrame(filter_frame)
+        self.location_dropdown_frame.pack(side="left", padx=10)
+        
+        # Create initial dropdowns with default values
+        self.dept_dropdown = ctk.CTkOptionMenu(
+            self.dept_dropdown_frame, 
+            variable=self.dept_var,
+            values=["All Departments"]
         )
-        location_dropdown.pack(side="left", padx=10)
+        self.dept_dropdown.pack(fill="both")
+        
+        self.role_dropdown = ctk.CTkOptionMenu(
+            self.role_dropdown_frame, 
+            variable=self.role_var,
+            values=["All Roles"]
+        )
+        self.role_dropdown.pack(fill="both")
+        
+        self.location_dropdown = ctk.CTkOptionMenu(
+            self.location_dropdown_frame, 
+            variable=self.location_var,
+            values=["All Locations"]
+        )
+        self.location_dropdown.pack(fill="both")
         
         # Submit button
         ctk.CTkButton(
@@ -310,80 +324,132 @@ IMPORTANT: Your entire response must be ONLY the JSON object, with no additional
             # Statement text
             ctk.CTkLabel(stmt_frame, text=statement['statement'], wraplength=700, justify="left").pack(anchor="w", padx=10, pady=(0, 10))
     
+    def update_filter_dropdowns(self):
+        """Update the filter dropdowns based on the current value statements"""
+        if not self.value_statements:
+            return
+            
+        # Extract unique values for each metadata field
+        departments = set()
+        roles = set()
+        locations = set()
+        
+        for statement in self.value_statements:
+            departments.add(statement.get("department", "Unknown"))
+            roles.add(statement.get("role", "Unknown"))
+            locations.add(statement.get("location", "Unknown"))
+        
+        # Create sorted lists with "All" option first
+        dept_values = ["All Departments"] + sorted(list(departments))
+        role_values = ["All Roles"] + sorted(list(roles))
+        location_values = ["All Locations"] + sorted(list(locations))
+        
+        # Update the dropdowns with new values
+        self.dept_dropdown.configure(values=dept_values)
+        self.role_dropdown.configure(values=role_values)
+        self.location_dropdown.configure(values=location_values)
+        
+        # Reset to "All" if the current value isn't in the new list
+        if self.dept_var.get() not in dept_values:
+            self.dept_var.set("All Departments")
+        if self.role_var.get() not in role_values:
+            self.role_var.set("All Roles")
+        if self.location_var.get() not in location_values:
+            self.location_var.set("All Locations")
+    
     def add_sample_statements(self):
         """Add sample value statements to the repository"""
         sample_statements = [
             {
-                "department": "Customer Service",
-                "role": "Associate",
-                "location": "Remote",
-                "statement": "I value clear communication and timely responses from leadership since I work remotely and sometimes feel disconnected from the team. Having predictable schedules is crucial for me to balance client interactions with my family responsibilities as a single parent. I appreciate managers who trust their team to deliver quality work without micromanagement. Regular recognition of good performance motivates me, especially since I don't have daily in-person interactions with my supervisors. I believe transparency about company changes and career advancement opportunities helps remote workers feel included and valued."
-            },
-            {
-                "department": "HR",
-                "role": "Manager",
-                "location": "HQ",
-                "statement": "As someone working at headquarters, I value cross-departmental collaboration that helps me understand the broader organizational impact of HR initiatives. I believe in creating an inclusive workplace where employees feel psychologically safe to express concerns and ideas. Having worked my way up from an associate position, I'm passionate about developing internal talent and creating clear promotion pathways. Work-life balance is essential to me—I've experienced burnout in previous roles and prioritize sustainable workloads for myself and my team. I appreciate organizational cultures that embrace continuous feedback and adaptation rather than static annual reviews."
-            },
-            {
+                "name": "Kermit the Frog",
                 "department": "Operations",
-                "role": "Team Lead",
-                "location": "Regional Offices",
-                "statement": "Working in a regional office, I value being the bridge between headquarters' strategic vision and our local implementation realities. My 90-minute commute means flexibility around start times is particularly important to me. I believe in hands-on leadership and making time to work alongside my team members during busy periods. Open communication about upcoming changes helps me prepare my team effectively and reduce resistance. I value learning opportunities that focus on practical skills I can immediately apply to improve our processes."
-            },
-            {
-                "department": "IT",
                 "role": "Director",
-                "location": "Remote",
-                "statement": "Leading a distributed IT team has taught me to value asynchronous communication tools that respect different time zones and working styles. I believe strongly in outcome-based performance metrics rather than time-logged or constant availability. Having team members with diverse cultural backgrounds has shown me the importance of explicit communication and documented expectations. As someone with ADHD, I appreciate workplaces that allow for focused work periods without constant interruptions. I value organizations that invest in cutting-edge technologies and continuous learning, as this keeps our skills relevant and our work engaging."
-            },
-            {
-                "department": "Finance",
-                "role": "Associate",
                 "location": "HQ",
-                "statement": "As a recently hired finance associate, I value mentorship and guidance from experienced colleagues who can help me understand company-specific practices. Clear documentation of processes is important to me as I'm still learning our systems. I appreciate having quiet spaces for focused work, especially during month-end close periods when accuracy is critical. Being part of a diverse team helps me gain different perspectives on financial challenges. I value a workplace that recognizes both collaborative achievements and individual contributions to team success."
+                "statement": "Hi-ho! Kermit the Frog here. I value being able to keep the show running despite the constant chaos. It's not easy being green and in charge! I need everyone to meet deadlines so we don't disappoint our audience. I appreciate when Miss Piggy doesn't karate chop other performers, when the Electric Mayhem shows up on time, and when we can get through just ONE rehearsal without an explosion or Crazy Harry blowing something up. I worry about keeping everyone's spirits up when reviews are bad, and I need time to play my banjo when stress levels get too high. Most importantly, I need Fozzie to stop asking if his jokes are funny when I'm trying to prevent the theater from flooding."
             },
             {
+                "name": "Miss Piggy",
                 "department": "Customer Service",
-                "role": "Director",
-                "location": "Regional Offices",
-                "statement": "Having managed customer service teams for 15 years, I value leadership that balances business metrics with agent wellbeing. I believe frontline staff deserve a voice in process improvements since they experience customer challenges directly. Our regional location means we sometimes feel overlooked in company-wide initiatives, so I appreciate leadership that makes an effort to include our perspective. As the parent of a child with special needs, workplace flexibility during family emergencies has been crucial for my career longevity. I value transparent communication about organizational changes that might affect our team structure or client relationships."
-            },
-            {
-                "department": "IT",
                 "role": "Team Lead",
                 "location": "HQ",
-                "statement": "Working at headquarters gives me valuable face-time with leadership, but I'm mindful to create equal opportunities for my remote team members. I value technological solutions that enhance collaboration rather than creating additional work. Having transitioned from another industry, I appreciate a culture that values diverse experience and fresh perspectives. Clear priorities and realistic timelines are important to me for maintaining both project quality and team morale. I believe in creating psychological safety where team members can admit mistakes and ask questions without fear of judgment."
+                "statement": "Moi does not appreciate being asked to fill out tedious forms. As the star of this organization, I DEMAND priority treatment, my own dressing room, and top billing in all company communications. I refuse to work with frogs who don't appreciate my talent or bears with terrible jokes. I value APPLAUSE and ADORATION from management! My unique perspective? I deserve better than this, and I'm willing to deliver a karate chop to anyone who says otherwise! HIIIII-YAH! I expect flexibility for my numerous publicity appearances and acting auditions. My beauty routine requires at least two hours each morning, so don't even THINK about early meetings."
             },
             {
-                "department": "Operations",
-                "role": "Manager",
-                "location": "Remote",
-                "statement": "Managing operations remotely has taught me to value robust documentation and transparent workflows visible to all team members. I believe in giving my team autonomy while maintaining clear accountability frameworks. As someone living in a rural area, reliable connectivity and IT support are essential for my effectiveness. I value a workplace that recognizes results over hours worked or location. Having experienced both traditional and flexible work arrangements, I'm committed to accommodating different working styles while maintaining operational excellence."
-            },
-            {
+                "name": "Fozzie Bear",
                 "department": "HR",
                 "role": "Associate",
                 "location": "Regional Offices",
-                "statement": "Working in our regional HR office has shown me the importance of policies that can adapt to local contexts while maintaining company-wide fairness. I value clear career development paths that don't require relocation to headquarters. As someone from a minority background, I appreciate workplaces that actively seek diverse perspectives in decision-making. I believe in balancing digital efficiency with human connection, especially when addressing sensitive employee concerns. Regular two-way feedback opportunities help me improve my performance and feel valued as a contributor."
+                "statement": "Hiya! Wocka wocka! I value a workplace where people laugh at my jokes! Or at least don't throw tomatoes at me. Did you hear the one about the workplace policy? It was so boring, even the paper couldn't take it stationary! Wocka wocka! I think meetings should start with a joke to lighten the mood. I worry about performing—I mean working—in front of tough crowds like Statler and Waldorf. I need reassurance that I'm doing a good job, and maybe some help writing better jokes? Also, my rubber chicken should qualify for the dependent care benefits program. My mother always said I'm special even when nobody laughs, so maybe create a position where that's okay? Fozzie Bear, ladies and gentlemen! Thank you! Thank you!"
             },
             {
+                "name": "Gonzo",
+                "department": "IT",
+                "role": "Manager",
+                "location": "Remote",
+                "statement": "I value a workplace that lets me perform death-defying stunts with my computer equipment! Why type when you can bungee-jump while dictating emails? I need management to understand that sometimes I have to cancel meetings because I'm being shot out of a cannon. My best coding is done while hanging upside down, and my chicken Camilla deserves to be included in all team meetings. I propose replacing desk chairs with trampolines and installing trapeze swings in the hallways. Risk assessments? Those just get in the way of innovation! When servers crash, I want to crash with them—literally, through a wall of flaming servers! THAT'S entertainment... I mean, IT management!"
+            },
+            {
+                "name": "Animal",
+                "department": "Operations",
+                "role": "Associate",
+                "location": "Regional Offices",
+                "statement": "DRUMS! DRUMS! WOMAN! DRUMS! NO MEETINGS! ANIMAL HATE PAPERWORK! WANT DRUM BREAK EVERY HOUR! NO PANTS POLICY! FOOD! FOOD! ANIMAL HUNGRY AT DESK! NEED DRUM IN BATHROOM! WOMAN! BOSS MAN TALK TOO MUCH! ANIMAL NEED CHAIN ON DESK! NO CHAIN, ANIMAL RUN WILD! COFFEE! COFFEE! MORE COFFEE! NO EARLY! LATE GOOD! DRUM ALL NIGHT! SLEEP AT WORK! WO-MAAAAAN!"
+            },
+            {
+                "name": "Scooter",
+                "department": "Operations",
+                "role": "Associate",
+                "location": "HQ",
+                "statement": "I really value clear communication and advance notice for schedule changes so I can make sure everything's ready for showtime. It's important to me that we respect everyone's time and talents. My uncle who owns the theater—I mean company—taught me that good preparation prevents poor performance. I appreciate when managers provide constructive feedback instead of just throwing things. I think our workplace would improve with more organized storage systems and better emergency protocols for when acts go wrong. I'm happy to work late when needed, but some work-life balance would be nice so I can occasionally see my family (besides my uncle, of course)."
+            },
+            {
+                "name": "Rowlf",
                 "department": "Finance",
+                "role": "Team Lead",
+                "location": "HQ",
+                "statement": "You know, I just want a workplace where I can tickle the ivories between spreadsheets. Numbers are a lot like music—it's all about finding the right rhythm. I don't need much, just a piano in the break room and maybe a policy that lets dogs nap under their desks after lunch. I think meetings could use more musical interludes—improves morale, you know? I've been around the block a few times, played every dive bar in town before landing this gig, so I value managers who understand sometimes you gotta howl at the moon a little to keep your sanity. Oh, and those quarterly reports would sound a lot better as ballads, just saying."
+            },
+            {
+                "name": "Sam Eagle",
+                "department": "HR",
                 "role": "Director",
                 "location": "HQ",
-                "statement": "Leading a finance team at headquarters, I value the strategic partnership between finance and other departments to support informed decision-making. I believe in transparent communication about company performance and financial constraints. Having worked internationally, I appreciate workplaces that embrace diverse communication styles and approaches to problem-solving. As someone approaching retirement age, I value opportunities to mentor younger colleagues and create succession plans. I believe organizational health is best measured through both financial metrics and employee wellbeing indicators."
+                "statement": "I believe in AMERICAN VALUES in the workplace! This means PATRIOTISM, DECENCY, and absolutely NO MORE Fozzie Bear joke emails! I propose mandatory flag salutes before meetings and the elimination of casual Fridays—professional attire ONLY! Lunch breaks should be limited to AMERICAN foods—no more of the Swedish Chef's incomprehensible foreign cuisine! I value PROPER PROCEDURES and DIGNIFIED CONDUCT, which means no more Animal in the supply closet! Remote work is for those lacking COMMITMENT to the AMERICAN WAY! The Muppet health plan should NOT cover rubber chicken-related injuries! These are my values, which are CORRECT and AMERICAN, unlike the rest of you weirdos!"
             },
             {
-                "department": "Customer Service",
-                "role": "Team Lead",
-                "location": "Remote",
-                "statement": "As a remote team lead with hearing difficulties, I value meetings that include clear agendas and written follow-ups. I believe in creating team connections through meaningful virtual interactions rather than forced social events. My experience working across time zones has shown me the importance of respecting boundaries and offline time. I value workplaces that judge performance on customer satisfaction and team cohesion rather than adherence to rigid protocols. Having a neurodivergent perspective has helped me develop unique problem-solving approaches that I'm encouraged to share."
-            },
-            {
+                "name": "Statler",
                 "department": "Finance",
+                "role": "Director",
+                "location": "Remote",
+                "statement": "What's this form for? Another harebrained HR scheme? In my day, we didn't have 'workplace values'—we had WORK! This looks like something dreamed up by consultants to justify their existence. You want my professional values? How about not wasting my time with ridiculous surveys! I value my retirement fund not being squandered on team-building exercises and fancy coffee machines. If management spent less time asking about our feelings and more time fixing that draft in the balcony, maybe I'd stop falling asleep during meetings! This whole exercise deserves a loud 'DO-HO-HO-HO!' Waste of time, just like this company!"
+            },
+            {
+                "name": "Waldorf",
+                "department": "Operations",
                 "role": "Manager",
+                "location": "Remote",
+                "statement": "I tried to retire 30 years ago, but my pension's worth less than Fozzie's joke book! Now I'm stuck managing operations from my balcony seat. My workplace values? I value when the show is OVER! DO-HO-HO-HO! I suppose I value meetings that end early and expense reports that get approved without questions about my back pain medication. The young folks complain about work-life balance—I haven't had balance since 1976! I'd like a workplace where I don't have to explain technology to dinosaurs even older than me. And why is this form so small? I can barely read it! Is that part of your accessibility values? DO-HO-HO-HO!"
+            },
+            {
+                "name": "Swedish Chef",
+                "department": "IT",
+                "role": "Team Lead",
                 "location": "Regional Offices",
-                "statement": "Working in our regional finance office, I value the balance between corporate standardization and local autonomy in financial processes. I believe in promoting financial literacy across departments to build better business partnerships. As a parent of teenagers, I appreciate flexibility around school events and family commitments. My commute through heavy traffic means I value the option to work remotely during adverse weather conditions. Having seen multiple reorganizations, I value transparent communication about organizational changes and honest discussions about how they might impact regional teams."
+                "statement": "Børk! Børk! Børk! Zee vorkploose moost be like zee kitchen! Yuuu put de codey-wodey in de systemy-wistemy und BOOM! It vorks! No vorks? Throw de chicken at de computer! Børk! Børk! I velue de time for der experimenty mit der microsofty und der googly boogly. No likey der meetings vith no foody. All meetings moost have sneckies! Techno-bubble needs der flippity floppity und der BOOM CHICKA BOOM! Und most importanty, no pooter der herdy berdy in der fishy dishy vithout der proper backuppy. Børk! Børk! Børk!"
+            },
+            {
+                "name": "Beaker",
+                "department": "IT",
+                "role": "Associate",
+                "location": "HQ",
+                "statement": "Meep meep meep meep! Meep meep meep meep meep meep meep. Meep meep? Meep meep meep meep meep meep, meep meep meep meep meep! MEEP MEEP MEEP! Meep meep meep, meep meep meep meep meep meep. Meep, meep meep meep meep meep meep meep meep-meep meep meep meep meep. Meep meep meep meep, meep meep; meep meep meep meep meep meep meep. Meep meep meep meep meep... meep meep meep meep meep meep meep. Meep meep meep? MEEEEEEEEEEP!"
+            },
+            {
+                "name": "Dr. Bunsen Honeydew",
+                "department": "IT",
+                "role": "Director",
+                "location": "HQ",
+                "statement": "Greetings! I value a workplace that allows for scientific experimentation on—I mean WITH—my colleagues! I propose replacing our current feedback system with my new invention, the Performance-o-Meter, which administers mild electric shocks for substandard work! I believe coffee breaks should be used for testing new chemical compounds I've developed. Our servers would run 0.0037% more efficiently if we could harness the kinetic energy from Beaker's anxiety-induced trembling! I need budget approval for more bunsen burners at workstations and a company policy permitting the occasional workplace explosion in the name of progress. And finally, helmets should be mandatory during all meetings where I'm presenting new ideas!"
             }
         ]
         
@@ -415,35 +481,49 @@ IMPORTANT: Your entire response must be ONLY the JSON object, with no additional
         info_frame = ctk.CTkFrame(add_window)
         info_frame.grid(row=1, column=0, padx=10, pady=10, sticky="ew")
         
+        # Get existing metadata values
+        departments = set(["Customer Service", "IT", "HR", "Finance", "Operations"])
+        roles = set(["Associate", "Team Lead", "Manager", "Director"])
+        locations = set(["HQ", "Regional Offices", "Remote"])
+        
+        # Add values from existing statements
+        for statement in self.value_statements:
+            if "department" in statement:
+                departments.add(statement["department"])
+            if "role" in statement:
+                roles.add(statement["role"])
+            if "location" in statement:
+                locations.add(statement["location"])
+        
         # Department
         ctk.CTkLabel(info_frame, text="Department:").grid(row=0, column=0, padx=10, pady=5, sticky="w")
-        dept_var = ctk.StringVar(value="Customer Service")
-        dept_dropdown = ctk.CTkOptionMenu(
+        dept_var = ctk.StringVar(value=next(iter(departments)) if departments else "")
+        dept_entry = ctk.CTkComboBox(
             info_frame, 
             variable=dept_var,
-            values=["Customer Service", "IT", "HR", "Finance", "Operations"]
+            values=sorted(list(departments))
         )
-        dept_dropdown.grid(row=0, column=1, padx=10, pady=5, sticky="w")
+        dept_entry.grid(row=0, column=1, padx=10, pady=5, sticky="w")
         
         # Role
         ctk.CTkLabel(info_frame, text="Role:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
-        role_var = ctk.StringVar(value="Associate")
-        role_dropdown = ctk.CTkOptionMenu(
+        role_var = ctk.StringVar(value=next(iter(roles)) if roles else "")
+        role_entry = ctk.CTkComboBox(
             info_frame, 
             variable=role_var,
-            values=["Associate", "Team Lead", "Manager", "Director"]
+            values=sorted(list(roles))
         )
-        role_dropdown.grid(row=1, column=1, padx=10, pady=5, sticky="w")
+        role_entry.grid(row=1, column=1, padx=10, pady=5, sticky="w")
         
         # Location
         ctk.CTkLabel(info_frame, text="Location:").grid(row=2, column=0, padx=10, pady=5, sticky="w")
-        location_var = ctk.StringVar(value="HQ")
-        location_dropdown = ctk.CTkOptionMenu(
+        location_var = ctk.StringVar(value=next(iter(locations)) if locations else "")
+        location_entry = ctk.CTkComboBox(
             info_frame, 
             variable=location_var,
-            values=["HQ", "Regional Offices", "Remote"]
+            values=sorted(list(locations))
         )
-        location_dropdown.grid(row=2, column=1, padx=10, pady=5, sticky="w")
+        location_entry.grid(row=2, column=1, padx=10, pady=5, sticky="w")
         
         # Statement text
         ctk.CTkLabel(add_window, text="Value Statement:", 
@@ -496,13 +576,16 @@ IMPORTANT: Your entire response must be ONLY the JSON object, with no additional
         ).pack(side="right", padx=10, pady=10)
     
     def update_repository_stats(self):
-        """Update the repository statistics display"""
+        """Update the repository statistics display and filter dropdowns"""
         self.statement_count_var.set(f"Total Statements: {len(self.value_statements)}")
         
         # Calculate percentage coverage (for demo purposes)
         total_associates = 54  # Pretend total company size
         coverage = min(100, round((len(self.value_statements) / total_associates) * 100))
         self.coverage_var.set(f"Associate Coverage: {coverage}%")
+        
+        # Update filter dropdowns with current metadata values
+        self.update_filter_dropdowns()
     
     def run_chorus_simulation(self):
         """Run the Habermas Chorus simulation"""
