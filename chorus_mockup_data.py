@@ -7,50 +7,74 @@ SAMPLE_VALUE_STATEMENTS = [
     {
         "department": "Customer Service",
         "role": "Associate",
-        "location": "HQ",
-        "statement": "I believe in a healthy work-life balance. I'm most productive when I have flexibility in my schedule, but I also value in-person collaboration with my team. I live 45 minutes from the office, so commuting daily is a significant time commitment for me."
-    },
-    {
-        "department": "IT",
-        "role": "Team Lead",
-        "location": "Regional Offices",
-        "statement": "I prioritize team cohesion and effective communication. While I appreciate the focus time that remote work allows, I've found that certain collaborative tasks are more efficient in person. Technology enablement is critical for any work arrangement."
+        "location": "Remote",
+        "statement": "I value clear communication and timely responses from leadership since I work remotely and sometimes feel disconnected from the team. Having predictable schedules is crucial for me to balance client interactions with my family responsibilities as a single parent. I appreciate managers who trust their team to deliver quality work without micromanagement. Regular recognition of good performance motivates me, especially since I don't have daily in-person interactions with my supervisors. I believe transparency about company changes and career advancement opportunities helps remote workers feel included and valued."
     },
     {
         "department": "HR",
         "role": "Manager",
         "location": "HQ",
-        "statement": "I value inclusive policies that accommodate different working styles and personal circumstances. I believe our workplace should be equitable and accessible to all, regardless of their personal situation or preferences."
+        "statement": "As someone working at headquarters, I value cross-departmental collaboration that helps me understand the broader organizational impact of HR initiatives. I believe in creating an inclusive workplace where employees feel psychologically safe to express concerns and ideas. Having worked my way up from an associate position, I'm passionate about developing internal talent and creating clear promotion pathways. Work-life balance is essential to me—I've experienced burnout in previous roles and prioritize sustainable workloads for myself and my team. I appreciate organizational cultures that embrace continuous feedback and adaptation rather than static annual reviews."
+    },
+    {
+        "department": "Operations",
+        "role": "Team Lead",
+        "location": "Regional Offices",
+        "statement": "Working in a regional office, I value being the bridge between headquarters' strategic vision and our local implementation realities. My 90-minute commute means flexibility around start times is particularly important to me. I believe in hands-on leadership and making time to work alongside my team members during busy periods. Open communication about upcoming changes helps me prepare my team effectively and reduce resistance. I value learning opportunities that focus on practical skills I can immediately apply to improve our processes."
+    },
+    {
+        "department": "IT",
+        "role": "Director",
+        "location": "Remote",
+        "statement": "Leading a distributed IT team has taught me to value asynchronous communication tools that respect different time zones and working styles. I believe strongly in outcome-based performance metrics rather than time-logged or constant availability. Having team members with diverse cultural backgrounds has shown me the importance of explicit communication and documented expectations. As someone with ADHD, I appreciate workplaces that allow for focused work periods without constant interruptions. I value organizations that invest in cutting-edge technologies and continuous learning, as this keeps our skills relevant and our work engaging."
+    },
+    {
+        "department": "Finance",
+        "role": "Associate",
+        "location": "HQ",
+        "statement": "As a recently hired finance associate, I value mentorship and guidance from experienced colleagues who can help me understand company-specific practices. Clear documentation of processes is important to me as I'm still learning our systems. I appreciate having quiet spaces for focused work, especially during month-end close periods when accuracy is critical. Being part of a diverse team helps me gain different perspectives on financial challenges. I value a workplace that recognizes both collaborative achievements and individual contributions to team success."
+    },
+    {
+        "department": "Customer Service",
+        "role": "Director",
+        "location": "Regional Offices",
+        "statement": "Having managed customer service teams for 15 years, I value leadership that balances business metrics with agent wellbeing. I believe frontline staff deserve a voice in process improvements since they experience customer challenges directly. Our regional location means we sometimes feel overlooked in company-wide initiatives, so I appreciate leadership that makes an effort to include our perspective. As the parent of a child with special needs, workplace flexibility during family emergencies has been crucial for my career longevity. I value transparent communication about organizational changes that might affect our team structure or client relationships."
+    },
+    {
+        "department": "IT",
+        "role": "Team Lead",
+        "location": "HQ",
+        "statement": "Working at headquarters gives me valuable face-time with leadership, but I'm mindful to create equal opportunities for my remote team members. I value technological solutions that enhance collaboration rather than creating additional work. Having transitioned from another industry, I appreciate a culture that values diverse experience and fresh perspectives. Clear priorities and realistic timelines are important to me for maintaining both project quality and team morale. I believe in creating psychological safety where team members can admit mistakes and ask questions without fear of judgment."
+    },
+    {
+        "department": "Operations",
+        "role": "Manager",
+        "location": "Remote",
+        "statement": "Managing operations remotely has taught me to value robust documentation and transparent workflows visible to all team members. I believe in giving my team autonomy while maintaining clear accountability frameworks. As someone living in a rural area, reliable connectivity and IT support are essential for my effectiveness. I value a workplace that recognizes results over hours worked or location. Having experienced both traditional and flexible work arrangements, I'm committed to accommodating different working styles while maintaining operational excellence."
+    },
+    {
+        "department": "HR",
+        "role": "Associate",
+        "location": "Regional Offices",
+        "statement": "Working in our regional HR office has shown me the importance of policies that can adapt to local contexts while maintaining company-wide fairness. I value clear career development paths that don't require relocation to headquarters. As someone from a minority background, I appreciate workplaces that actively seek diverse perspectives in decision-making. I believe in balancing digital efficiency with human connection, especially when addressing sensitive employee concerns. Regular two-way feedback opportunities help me improve my performance and feel valued as a contributor."
     },
     {
         "department": "Finance",
         "role": "Director",
         "location": "HQ",
-        "statement": "I prioritize measurable results and accountability. I believe that clear expectations and metrics for success are essential regardless of work location. I'm concerned about maintaining our company culture with distributed teams."
-    },
-    {
-        "department": "Operations",
-        "role": "Associate",
-        "location": "Remote",
-        "statement": "I care deeply about environmental impact and believe reducing commutes is beneficial. I've arranged my home workspace to be productive and prefer to minimize unnecessary travel. I have caregiving responsibilities that make remote work essential for me."
+        "statement": "Leading a finance team at headquarters, I value the strategic partnership between finance and other departments to support informed decision-making. I believe in transparent communication about company performance and financial constraints. Having worked internationally, I appreciate workplaces that embrace diverse communication styles and approaches to problem-solving. As someone approaching retirement age, I value opportunities to mentor younger colleagues and create succession plans. I believe organizational health is best measured through both financial metrics and employee wellbeing indicators."
     },
     {
         "department": "Customer Service",
         "role": "Team Lead",
-        "location": "Regional Offices",
-        "statement": "I value fairness and consistency in how policies are applied. I believe that customer needs should drive our decisions about work location. I'm concerned about the potential for inequity between roles that can and cannot work remotely."
-    },
-    {
-        "department": "IT",
-        "role": "Manager",
         "location": "Remote",
-        "statement": "I prioritize innovation and believe diverse perspectives drive better solutions. I've found that a mix of collaborative time and independent work leads to the best outcomes for complex projects. I'm concerned about maintaining security with remote work."
+        "statement": "As a remote team lead with hearing difficulties, I value meetings that include clear agendas and written follow-ups. I believe in creating team connections through meaningful virtual interactions rather than forced social events. My experience working across time zones has shown me the importance of respecting boundaries and offline time. I value workplaces that judge performance on customer satisfaction and team cohesion rather than adherence to rigid protocols. Having a neurodivergent perspective has helped me develop unique problem-solving approaches that I'm encouraged to share."
     },
     {
-        "department": "Operations",
-        "role": "Director",
-        "location": "HQ",
-        "statement": "I value efficiency and resource optimization. I believe our office space should be utilized effectively, and that some in-person time is essential for building relationships and trust among teams."
+        "department": "Finance",
+        "role": "Manager",
+        "location": "Regional Offices",
+        "statement": "Working in our regional finance office, I value the balance between corporate standardization and local autonomy in financial processes. I believe in promoting financial literacy across departments to build better business partnerships. As a parent of teenagers, I appreciate flexibility around school events and family commitments. My commute through heavy traffic means I value the option to work remotely during adverse weather conditions. Having seen multiple reorganizations, I value transparent communication about organizational changes and honest discussions about how they might impact regional teams."
     }
 ]
 
