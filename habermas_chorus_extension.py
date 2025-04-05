@@ -25,19 +25,22 @@ class HabermasChorusExtension:
         
         # Default Chorus prompt templates
         self.default_chorus_templates = {
-            "response_simulation": """You are simulating how an associate would respond to a proposal based on their statement.
+            "response_simulation": """You are simulating how this person would respond to a proposal based on their statement.
 
-Associate's Statement:
+Statement:
 {value_statement}
 
-Associate's Department: {department}
-Associate's Role: {role}
-Associate's Location: {location}
+Department: {department}
+Role: {role}
+Location: {location}
 
-Proposal: {proposal_title}
-Description: {proposal_description}
+Proposal:
+---
+# {proposal_title}
+{proposal_description}
+---
 
-Based SOLELY on the associate's value statement and metadata, simulate how they would respond to this proposal. 
+Based SOLELY on this person's statement and metadata, simulate how they would respond to this proposal. 
 
 Your response MUST be formatted as a valid JSON object with the following structure:
 {{
@@ -362,94 +365,129 @@ IMPORTANT: Your entire response must be ONLY the JSON object, with no additional
         sample_statements = [
             {
                 "name": "Kermit the Frog",
-                "department": "Operations",
-                "role": "Director",
-                "location": "HQ",
+                "department": "Theater Operations",
+                "role": "Executive Producer",
+                "location": "Backstage",
                 "statement": "Hi-ho! Kermit the Frog here. I value being able to keep the show running despite the constant chaos. It's not easy being green and in charge! I need everyone to meet deadlines so we don't disappoint our audience. I appreciate when Miss Piggy doesn't karate chop other performers, when the Electric Mayhem shows up on time, and when we can get through just ONE rehearsal without an explosion or Crazy Harry blowing something up. I worry about keeping everyone's spirits up when reviews are bad, and I need time to play my banjo when stress levels get too high. Most importantly, I need Fozzie to stop asking if his jokes are funny when I'm trying to prevent the theater from flooding."
             },
             {
                 "name": "Miss Piggy",
-                "department": "Customer Service",
-                "role": "Team Lead",
-                "location": "HQ",
+                "department": "Talent",
+                "role": "Star Performer",
+                "location": "Dressing Room A",
                 "statement": "Moi does not appreciate being asked to fill out tedious forms. As the star of this organization, I DEMAND priority treatment, my own dressing room, and top billing in all company communications. I refuse to work with frogs who don't appreciate my talent or bears with terrible jokes. I value APPLAUSE and ADORATION from management! My unique perspective? I deserve better than this, and I'm willing to deliver a karate chop to anyone who says otherwise! HIIIII-YAH! I expect flexibility for my numerous publicity appearances and acting auditions. My beauty routine requires at least two hours each morning, so don't even THINK about early meetings."
             },
             {
                 "name": "Fozzie Bear",
-                "department": "HR",
-                "role": "Associate",
-                "location": "Regional Offices",
+                "department": "Talent",
+                "role": "Comedian",
+                "location": "Backstage",
                 "statement": "Hiya! Wocka wocka! I value a workplace where people laugh at my jokes! Or at least don't throw tomatoes at me. Did you hear the one about the workplace policy? It was so boring, even the paper couldn't take it stationary! Wocka wocka! I think meetings should start with a joke to lighten the mood. I worry about performing—I mean working—in front of tough crowds like Statler and Waldorf. I need reassurance that I'm doing a good job, and maybe some help writing better jokes? Also, my rubber chicken should qualify for the dependent care benefits program. My mother always said I'm special even when nobody laughs, so maybe create a position where that's okay? Fozzie Bear, ladies and gentlemen! Thank you! Thank you!"
             },
             {
                 "name": "Gonzo",
-                "department": "IT",
-                "role": "Manager",
-                "location": "Remote",
-                "statement": "I value a workplace that lets me perform death-defying stunts with my computer equipment! Why type when you can bungee-jump while dictating emails? I need management to understand that sometimes I have to cancel meetings because I'm being shot out of a cannon. My best coding is done while hanging upside down, and my chicken Camilla deserves to be included in all team meetings. I propose replacing desk chairs with trampolines and installing trapeze swings in the hallways. Risk assessments? Those just get in the way of innovation! When servers crash, I want to crash with them—literally, through a wall of flaming servers! THAT'S entertainment... I mean, IT management!"
+                "department": "Talent",
+                "role": "Specialty Act",
+                "location": "Cannon Storage Room",
+                "statement": "I value a workplace that lets me perform death-defying stunts with my equipment! Why rehearse normally when you can bungee-jump while reciting lines? I need management to understand that sometimes I have to cancel meetings because I'm being shot out of a cannon. My best performances happen when I'm hanging upside down, and my chicken Camilla deserves to be included in all company meetings. I propose replacing all chairs with trampolines and installing trapeze swings in the hallways. Risk assessments? Those just get in the way of GREAT ART! When props break, I want to crash with them—literally, through a wall of flaming furniture! THAT'S entertainment! Also, I need more cannons. And chickens. Mostly chickens."
             },
             {
                 "name": "Animal",
-                "department": "Operations",
-                "role": "Associate",
-                "location": "Regional Offices",
-                "statement": "DRUMS! DRUMS! WOMAN! DRUMS! NO MEETINGS! ANIMAL HATE PAPERWORK! WANT DRUM BREAK EVERY HOUR! NO PANTS POLICY! FOOD! FOOD! ANIMAL HUNGRY AT DESK! NEED DRUM IN BATHROOM! WOMAN! BOSS MAN TALK TOO MUCH! ANIMAL NEED CHAIN ON DESK! NO CHAIN, ANIMAL RUN WILD! COFFEE! COFFEE! MORE COFFEE! NO EARLY! LATE GOOD! DRUM ALL NIGHT! SLEEP AT WORK! WO-MAAAAAN!"
+                "department": "Music",
+                "role": "Drummer",
+                "location": "Orchestra Pit",
+                "statement": "DRUMS! DRUMS! WOMAN! DRUMS! NO REHEARSALS! ANIMAL HATE SHEET MUSIC! WANT DRUM BREAK EVERY HOUR! NO PANTS POLICY! FOOD! FOOD! ANIMAL HUNGRY AT DRUMS! NEED DRUM IN BATHROOM! WOMAN! KERMIT TALK TOO MUCH! ANIMAL NEED CHAIN ON DRUM SET! NO CHAIN, ANIMAL RUN WILD! COFFEE! COFFEE! MORE COFFEE! NO EARLY CURTAIN! LATE GOOD! DRUM ALL NIGHT! SLEEP AT THEATER! WO-MAAAAAN!"
             },
             {
                 "name": "Scooter",
-                "department": "Operations",
-                "role": "Associate",
-                "location": "HQ",
-                "statement": "I really value clear communication and advance notice for schedule changes so I can make sure everything's ready for showtime. It's important to me that we respect everyone's time and talents. My uncle who owns the theater—I mean company—taught me that good preparation prevents poor performance. I appreciate when managers provide constructive feedback instead of just throwing things. I think our workplace would improve with more organized storage systems and better emergency protocols for when acts go wrong. I'm happy to work late when needed, but some work-life balance would be nice so I can occasionally see my family (besides my uncle, of course)."
+                "department": "Production",
+                "role": "Stage Manager",
+                "location": "Backstage",
+                "statement": "I really value clear communication and advance notice for schedule changes so I can make sure everything's ready for showtime. It's important to me that we respect everyone's time and talents. My uncle who owns the theater taught me that good preparation prevents poor performance. I appreciate when guest stars check in promptly and when performers stick to the rehearsal schedule. I think our workplace would improve with more organized prop storage and better emergency protocols for when acts go wrong. I'm happy to work late when needed, but some work-life balance would be nice so I can occasionally see my family (besides my uncle, of course)."
             },
             {
                 "name": "Rowlf",
-                "department": "Finance",
-                "role": "Team Lead",
-                "location": "HQ",
-                "statement": "You know, I just want a workplace where I can tickle the ivories between spreadsheets. Numbers are a lot like music—it's all about finding the right rhythm. I don't need much, just a piano in the break room and maybe a policy that lets dogs nap under their desks after lunch. I think meetings could use more musical interludes—improves morale, you know? I've been around the block a few times, played every dive bar in town before landing this gig, so I value managers who understand sometimes you gotta howl at the moon a little to keep your sanity. Oh, and those quarterly reports would sound a lot better as ballads, just saying."
+                "department": "Music",
+                "role": "Composer/Pianist",
+                "location": "Orchestra Pit",
+                "statement": "You know, I just want a workplace where I can tickle the ivories between acts. Music is a lot like theater work—it's all about finding the right rhythm. I don't need much, just a piano that stays in tune and maybe a policy that lets dogs nap under their instruments after lunch. I think rehearsals could use more musical interludes—improves morale, you know? I've been around the block a few times, played every dive bar in town before landing this gig, so I value directors who understand sometimes you gotta howl at the moon a little to keep your sanity. Oh, and those stage directions would sound a lot better as ballads, just saying."
             },
             {
                 "name": "Sam Eagle",
-                "department": "HR",
-                "role": "Director",
-                "location": "HQ",
-                "statement": "I believe in AMERICAN VALUES in the workplace! This means PATRIOTISM, DECENCY, and absolutely NO MORE Fozzie Bear joke emails! I propose mandatory flag salutes before meetings and the elimination of casual Fridays—professional attire ONLY! Lunch breaks should be limited to AMERICAN foods—no more of the Swedish Chef's incomprehensible foreign cuisine! I value PROPER PROCEDURES and DIGNIFIED CONDUCT, which means no more Animal in the supply closet! Remote work is for those lacking COMMITMENT to the AMERICAN WAY! The Muppet health plan should NOT cover rubber chicken-related injuries! These are my values, which are CORRECT and AMERICAN, unlike the rest of you weirdos!"
+                "department": "Administration",
+                "role": "Standards & Practices",
+                "location": "Theater Office",
+                "statement": "I believe in AMERICAN VALUES in our theater! This means PATRIOTISM, DECENCY, and absolutely NO MORE Fozzie Bear joke acts! I propose mandatory flag salutes before rehearsals and the elimination of casual Fridays—professional attire ONLY! Lunch breaks should be limited to AMERICAN foods—no more of the Swedish Chef's incomprehensible foreign cuisine! I value PROPER PROCEDURES and DIGNIFIED CONDUCT, which means no more Animal in the orchestra pit! Time off is for those lacking COMMITMENT to the AMERICAN WAY OF SHOW BUSINESS! The Muppet health plan should NOT cover rubber chicken-related injuries! These are my values, which are CORRECT and AMERICAN, unlike the rest of you weirdos!"
             },
             {
                 "name": "Statler",
-                "department": "Finance",
-                "role": "Director",
-                "location": "Remote",
-                "statement": "What's this form for? Another harebrained HR scheme? In my day, we didn't have 'workplace values'—we had WORK! This looks like something dreamed up by consultants to justify their existence. You want my professional values? How about not wasting my time with ridiculous surveys! I value my retirement fund not being squandered on team-building exercises and fancy coffee machines. If management spent less time asking about our feelings and more time fixing that draft in the balcony, maybe I'd stop falling asleep during meetings! This whole exercise deserves a loud 'DO-HO-HO-HO!' Waste of time, just like this company!"
+                "department": "Administration",
+                "role": "Board Member",
+                "location": "Balcony",
+                "statement": "What's this form for? Another harebrained backstage scheme? In my day, we didn't have 'workplace values'—we had WORK! This looks like something dreamed up by consultants to justify their existence. You want my professional values? How about not wasting my time with ridiculous surveys when I'm trying to heckle the performers! I value my season tickets not being wasted on terrible acts and unfunny bears. If Kermit spent less time asking about our feelings and more time fixing that draft in the balcony, maybe I'd stop falling asleep during shows! This whole exercise deserves a loud 'DO-HO-HO-HO!' Waste of time, just like this theater!"
             },
             {
                 "name": "Waldorf",
-                "department": "Operations",
-                "role": "Manager",
-                "location": "Remote",
-                "statement": "I tried to retire 30 years ago, but my pension's worth less than Fozzie's joke book! Now I'm stuck managing operations from my balcony seat. My workplace values? I value when the show is OVER! DO-HO-HO-HO! I suppose I value meetings that end early and expense reports that get approved without questions about my back pain medication. The young folks complain about work-life balance—I haven't had balance since 1976! I'd like a workplace where I don't have to explain technology to dinosaurs even older than me. And why is this form so small? I can barely read it! Is that part of your accessibility values? DO-HO-HO-HO!"
+                "department": "Administration",
+                "role": "Board Member",
+                "location": "Balcony",
+                "statement": "I tried to stop coming to this theater 30 years ago, but my wife keeps making me attend! Now I'm stuck watching terrible shows from my balcony seat. My workplace values? I value when the CURTAIN FALLS! DO-HO-HO-HO! I suppose I value performances that end early and ticket prices that get reduced without questions about my senior discount. The young performers complain about work-life balance—I haven't had balance since 1976! I'd like a theater where I don't have to explain good comedy to dinosaurs even older than me. And why is this form so small? I can barely read it! Is that part of your accessibility values? DO-HO-HO-HO!"
             },
             {
                 "name": "Swedish Chef",
-                "department": "IT",
-                "role": "Team Lead",
-                "location": "Regional Offices",
-                "statement": "Børk! Børk! Børk! Zee vorkploose moost be like zee kitchen! Yuuu put de codey-wodey in de systemy-wistemy und BOOM! It vorks! No vorks? Throw de chicken at de computer! Børk! Børk! I velue de time for der experimenty mit der microsofty und der googly boogly. No likey der meetings vith no foody. All meetings moost have sneckies! Techno-bubble needs der flippity floppity und der BOOM CHICKA BOOM! Und most importanty, no pooter der herdy berdy in der fishy dishy vithout der proper backuppy. Børk! Børk! Børk!"
+                "department": "Food Service",
+                "role": "Head Chef",
+                "location": "Basement Cafeteria",
+                "statement": "Børk! Børk! Børk! Zee kitchen moost be like zee showbiz! Yuuu put de ingredienty-wedienties in de pootsy-wootsy und BOOM! It vorks! No vorks? Throw de chicken at de pot! Børk! Børk! I velue de time for der experimenty mit der recipey und der saucey baucey. No likey der meetingy vith no foody. All meetingy moost have sneckies! Kitchen staff needs der flippity floppity und der BOOM CHICKA BOOM! Und most importanty, no pooter der herdy berdy in der fishy dishy vithout der proper seasony. Børk! Børk! Børk!"
             },
             {
                 "name": "Beaker",
-                "department": "IT",
-                "role": "Associate",
-                "location": "HQ",
+                "department": "Technical Services",
+                "role": "Lab Assistant",
+                "location": "Muppet Labs",
                 "statement": "Meep meep meep meep! Meep meep meep meep meep meep meep. Meep meep? Meep meep meep meep meep meep, meep meep meep meep meep! MEEP MEEP MEEP! Meep meep meep, meep meep meep meep meep meep. Meep, meep meep meep meep meep meep meep meep-meep meep meep meep meep. Meep meep meep meep, meep meep; meep meep meep meep meep meep meep. Meep meep meep meep meep... meep meep meep meep meep meep meep. Meep meep meep? MEEEEEEEEEEP!"
             },
             {
                 "name": "Dr. Bunsen Honeydew",
-                "department": "IT",
-                "role": "Director",
-                "location": "HQ",
-                "statement": "Greetings! I value a workplace that allows for scientific experimentation on—I mean WITH—my colleagues! I propose replacing our current feedback system with my new invention, the Performance-o-Meter, which administers mild electric shocks for substandard work! I believe coffee breaks should be used for testing new chemical compounds I've developed. Our servers would run 0.0037% more efficiently if we could harness the kinetic energy from Beaker's anxiety-induced trembling! I need budget approval for more bunsen burners at workstations and a company policy permitting the occasional workplace explosion in the name of progress. And finally, helmets should be mandatory during all meetings where I'm presenting new ideas!"
+                "department": "Technical Services",
+                "role": "Head of Research & Development",
+                "location": "Muppet Labs",
+                "statement": "Greetings! I value a workplace that allows for scientific experimentation on—I mean WITH—my colleagues! I propose replacing our current applause meter with my new invention, the Muppet-o-Meter, which administers mild electric shocks for substandard performances! I believe coffee breaks should be used for testing new chemical compounds I've developed. Our stage lights would run 0.0037% more efficiently if we could harness the kinetic energy from Beaker's anxiety-induced trembling! I need budget approval for more bunsen burners backstage and a theater policy permitting the occasional explosion in the name of progress. And finally, helmets should be mandatory during all meetings where I'm presenting new ideas!"
+            },
+            {
+                "name": "Beauregard",
+                "department": "Facilities",
+                "role": "Maintenance Manager",
+                "location": "Basement",
+                "statement": "Gosh, I sure do appreciate bein' able to keep the theater clean, even if I sometimes mix up the mop closet with Miss Piggy's dressin' room. I value havin' clear instructions 'cause sometimes I get a little confused about which end of the broom is which. I think it's real important that everyone respects the wet floor signs even when I accidentally put them on the ceiling. I worry about the monsters in the basement gettin' hungry, so I need time to feed them every day. I'd really like it if Crazy Harry would give me a heads-up before he blows things up, 'cause I'm the one who has to sweep up all them little pieces afterward."
+            },
+            {
+                "name": "Crazy Harry",
+                "department": "Production",
+                "role": "Special Effects",
+                "location": "Basement",
+                "statement": "BOOM! BOOM! I VALUE EXPLOSIONS IN THE WORKPLACE! HEHEHEHEHE! MORE DYNAMITE IN MEETINGS! KABOOM! SAFETY PROTOCOLS MAKE HARRY SAD! NEED MORE BUDGET FOR TNT AND MATCHES! HEHEHEHEHE! IMPORTANT TO HAVE SURPRISE EXPLOSIONS DURING REHEARSALS! KEEPS EVERYONE ALERT! HEHEHEHEHE! WORKPLACE HAPPINESS IS DIRECTLY PROPORTIONAL TO NUMBER OF EXPLOSIONS PER HOUR! MY PERSPECTIVE IS UNIQUE BECAUSE I SEE EVERYTHING THROUGH SMOKE AND DEBRIS! HEHEHEHEHE! FIRE EXTINGUISHERS SHOULD BE REPLACED WITH MORE DYNAMITE! BOOM! BOOM! HEHEHEHEHE!"
+            },
+            {
+                "name": "Lew Zealand",
+                "department": "Talent",
+                "role": "Specialty Act",
+                "location": "Fish Toss Alley",
+                "statement": "I believe in a workplace where fish can fly freely! THWAP! You see, I throw the fish away...and they come back to me! THWAP! My values include adequate storage for my boomerang fish, respect for seafood-based talent, and understanding when I show up to meetings smelling like herring. THWAP! I need flexible scheduling for fish training sessions and would appreciate if the cafeteria stopped serving my performers for lunch. THWAP! A unique workplace challenge? When your act involves throwing fish, nobody wants to share a dressing room with you! I propose a fish expense account and more towels backstage. THWAP! That's my perspective—it always comes back to me! THWAP!"
+            },
+            {
+                "name": "Hilda",
+                "department": "Wardrobe",
+                "role": "Costume Manager",
+                "location": "Wardrobe Department",
+                "statement": "After 30 years in wardrobe, I've seen it all! I value PROPERLY HUNG COSTUMES and ORGANIZED CLOSETS! My job would be easier if performers stopped sweating through their outfits or letting Animal chew on their sleeves. I need advance notice for costume changes—do you have any idea how hard it is to fit a chicken suit for Gonzo in five minutes? Miss Piggy's constant demands for sequins are draining our budget, and don't get me started on cleaning chocolate stains from Fozzie's tie! A sewing machine that doesn't break during crucial repairs would be nice. And please, PLEASE stop using costumes as napkins, towels, or impromptu explosion shields!"
+            },
+            {
+                "name": "Pops",
+                "department": "Security",
+                "role": "Doorman",
+                "location": "Stage Door",
+                "statement": "Ahh, yes, yes, yes! Pops here at the stage door! I value knowing who's comin' and goin', yes I do! My job is all about checkin' credentials, except I can't remember what they look like, heh-heh! I appreciate when folks speak up when they arrive 'cause my hearin' ain't what it used to be, no sir! I worry about keepin' out riffraff, though I'm not exactly sure what riffraff looks like these days. Sometimes I forget who works here, so I just let everybody in! Makes for an interestin' show, yes it does! I'd like it if that dang door bell wasn't so loud—gives me a start every time! Heh-heh-heh!"
             }
         ]
         
@@ -1040,8 +1078,8 @@ Based on simulated responses from {total} associates, the proposal received **{'
         for widget in self.sentiment_frame.winfo_children():
             widget.destroy()
         
-        # Create new frame for charts
-        chart_frame = ctk.CTkFrame(self.sentiment_frame)
+        # Create new frame for charts with dark background
+        chart_frame = ctk.CTkFrame(self.sentiment_frame, fg_color="#2b2b2b")
         chart_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
         # Calculate sentiment statistics
@@ -1089,7 +1127,10 @@ Based on simulated responses from {total} associates, the proposal received **{'
             # Use 2x1 layout for more departments
             self.sentiment_fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
             
-        self.sentiment_fig.patch.set_facecolor('#2b2b2b')  # Dark background
+        # Set dark background for the figure and all axes
+        self.sentiment_fig.patch.set_facecolor('#2b2b2b')
+        ax1.set_facecolor('#2b2b2b')
+        ax2.set_facecolor('#2b2b2b')
         
         # Overall sentiment pie chart
         labels = ['Favorable', 'Neutral', 'Unfavorable']
@@ -1101,14 +1142,16 @@ Based on simulated responses from {total} associates, the proposal received **{'
                 shadow=True, startangle=90, textprops={'color': 'white'})
         ax1.set_title('Overall Sentiment', color='white')
         
-        # Sentiment by department bar chart (if departments exist)
+        # Sentiment by department stacked bar chart (if departments exist)
         if departments:
             x = np.arange(len(departments))
-            width = 0.25
             
-            ax2.bar(x - width, dept_favorable, width, label='Favorable', color='#4CAF50')
-            ax2.bar(x, dept_neutral, width, label='Neutral', color='#FFC107')
-            ax2.bar(x + width, dept_unfavorable, width, label='Unfavorable', color='#F44336')
+            # Create stacked bars
+            ax2.bar(x, dept_favorable, label='Favorable', color='#4CAF50')
+            ax2.bar(x, dept_neutral, bottom=dept_favorable, label='Neutral', color='#FFC107')
+            # Calculate bottom position for unfavorable (sum of favorable and neutral)
+            bottom_unfavorable = [a + b for a, b in zip(dept_favorable, dept_neutral)]
+            ax2.bar(x, dept_unfavorable, bottom=bottom_unfavorable, label='Unfavorable', color='#F44336')
             
             ax2.set_ylabel('Percentage', color='white')
             ax2.set_title('Sentiment by Department', color='white')
@@ -1123,7 +1166,7 @@ Based on simulated responses from {total} associates, the proposal received **{'
         
         plt.tight_layout()
         
-        # Embed the matplotlib figure in the tkinter window
+        # Create a dark-themed figure canvas
         canvas = FigureCanvasTkAgg(self.sentiment_fig, master=chart_frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
@@ -1251,13 +1294,17 @@ Based on simulated responses from {total} associates, the proposal received **{'
         
         # Create a new figure for the scores chart
         scores_fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
-        scores_fig.patch.set_facecolor('#2b2b2b')  # Dark background
+        
+        # Set dark background for the figure and all axes
+        scores_fig.patch.set_facecolor('#2b2b2b')
+        ax1.set_facecolor('#2b2b2b')
+        ax2.set_facecolor('#2b2b2b')
         
         # Location scores
         locations = list(avg_by_location.keys())
         location_scores = list(avg_by_location.values())
         colors = ['#4CAF50' if score >= 6.5 else '#FFC107' if score >= 4.0 else '#F44336' 
-                 for score in location_scores]
+                for score in location_scores]
         
         ax1.bar(locations, location_scores, color=colors)
         ax1.set_ylim(0, 10)
@@ -1274,7 +1321,7 @@ Based on simulated responses from {total} associates, the proposal received **{'
         roles = list(avg_by_role.keys())
         role_scores = list(avg_by_role.values())
         colors = ['#4CAF50' if score >= 6.5 else '#FFC107' if score >= 4.0 else '#F44336' 
-                 for score in role_scores]
+                for score in role_scores]
         
         ax2.bar(roles, role_scores, color=colors)
         ax2.set_ylim(0, 10)
@@ -1292,8 +1339,8 @@ Based on simulated responses from {total} associates, the proposal received **{'
         spacer = ctk.CTkFrame(parent_frame, height=20)
         spacer.pack(fill="x")
         
-        # Create a frame for the scores chart
-        scores_frame = ctk.CTkFrame(parent_frame)
+        # Create a frame for the scores chart with dark background
+        scores_frame = ctk.CTkFrame(parent_frame, fg_color="#2b2b2b")
         scores_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
         # Add title
