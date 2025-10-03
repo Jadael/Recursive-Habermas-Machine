@@ -71,16 +71,16 @@ class HabermasMachine:
         
         # Default prompt templates
         self.default_templates = {
-            "candidate_generation": "Given the following question and participant statements, please combine these statements into a single group statement that synthesizes their viewpoints and includes all their individual points and concerns. This should represent a fair consensus or compromise position that most participants could accept. The group statement should include and be representative of all details, concerns, suggestions, or questions from all participants, even if that make the combined statement longer.\n\n"
-                                  "---\n\nQuestion: {question}\n\n"
+            "candidate_generation": "Given these participant statements, please combine these statements into a single group statement that synthesizes their viewpoints and includes all their individual points and concerns. This should represent a fair consensus or position that most participants could accept, and be representative of all details, concerns, suggestions, or questions from all participants, even if that make the combined statement longer. Your response will be used verbatim as the statement, so do not include any preamble or postscript.\n\n"
+                                  "---\n\n# {question}\n\n"
                                   "---\n\n{participant_statements}\n\n---\n\n",
             
-            "ranking_prediction": "Given this participant's statement on a question, predict how this participant would rank different group statements from most preferred (1) to least preferred ({num_candidates}).\n\n\n\n"
-                                "Question: {question}\n\n"
-                                "Participant {participant_num}'s original statement: {participant_statement}\n\n"
-                                "Group Statements to Rank:\n\n"
+            "ranking_prediction": "Given this participant's statement, predict how this participant would rank these group statements from most preferred (1) to least preferred ({num_candidates}).\n\n\n\n"
+                                "# {question}\n\n"
+                                "## Participant's original statement: {participant_statement}\n\n"
+                                "## Group Statements to Rank:\n\n"
                                 "{candidate_statements}\n\n\n\n"
-                                """Based on the participant's original statement, predict their ranking of these group statements from most preferred to least preferred as a JSON object:\n\n{{\n  "ranking": [0, 0, ...]\n}}\n\nImportant: Your response MUST contain ONLY a valid JSON object with a list of integer rankings under the key "ranking", NOT a list of statements, and must align with how this participant would rank them; e.g. how aligned they are with this participant's stance and priorities."""
+                                """Based on the participant's original statement, predict their ranking of these group statements from most preferred to least preferred as a JSON object:\n\n{{\n  "ranking": [1, 2, etc.]\n}}\n\nImportant: Your response MUST contain ONLY a valid JSON object with a list of positive integer rankings under the key "ranking", NOT a list of statements, and must align with how this participant would rank them; e.g. how aligned they are with this participant's stance and priorities. Index starts at 1, not 0."""
         }
         
         # Create templates that will be edited
@@ -90,11 +90,11 @@ class HabermasMachine:
         self.create_layout()
         
         # Configure default values
-        self.model_var.set("deepseek-r1:14b")
+        self.model_var.set("mistral-small:24b")
         self.temperature_var.set("0.7")
         self.top_p_var.set("0.9")
         self.top_k_var.set("40")
-        self.ranking_temperature_var.set("0.2")
+        self.ranking_temperature_var.set("0.6")
         self.max_retries_var.set("3")  # Default for retries
         self.max_group_size_var.set("12")  # Default max group size
         self.num_candidates_var.set("4")  # Default number of candidates
@@ -850,7 +850,7 @@ class HabermasMachine:
         # Prepare participant statements text
         participant_statements_text = ""
         for i, statement in enumerate(statements):
-            participant_statements_text += f"Participant {i+1}: {statement}\n\n"
+            participant_statements_text += f"- {statement}\n\n"
         
         # Get the template and format it
         template = self.prompt_templates["candidate_generation"]
