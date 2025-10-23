@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//g/Projects/habermas_machine/**)",
+      "Bash(mkdir -p habermas_machine/core habermas_machine/utils habermas_machine/data habermas_machine/gui habermas_machine/tests)",
+      "Bash(python test_imports.py)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
