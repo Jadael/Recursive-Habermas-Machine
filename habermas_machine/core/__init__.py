@@ -22,6 +22,27 @@ from .voting import (
     validate_rankings,
 )
 
+from .model_config import (
+    ModelType,
+    TaskType,
+    ModelConfig,
+    WorkflowConfig,
+    get_prompted_config,
+    get_finetuned_config,
+    get_hybrid_config,
+    optimize_workflow_order,
+    PROMPTED_DEEPSEEK,
+    PROMPTED_LLAMA,
+    PROMPTED_QWEN,
+    FINETUNED_COMMA,
+    HYBRID_EXAMPLE,
+)
+
+from .model_manager import (
+    ModelManager,
+    create_manager_from_preset,
+)
+
 __all__ = [
     # Prompts
     'generate_opinion_only_cot_prompt',
@@ -41,4 +62,21 @@ __all__ = [
     'format_pairwise_matrix',
     'format_strongest_paths',
     'validate_rankings',
+    # Model Configuration
+    'ModelType',
+    'TaskType',
+    'ModelConfig',
+    'WorkflowConfig',
+    'get_prompted_config',
+    'get_finetuned_config',
+    'get_hybrid_config',
+    'optimize_workflow_order',
+    'PROMPTED_DEEPSEEK',
+    'PROMPTED_LLAMA',
+    'PROMPTED_QWEN',
+    'FINETUNED_COMMA',
+    'HYBRID_EXAMPLE',
+    # Model Manager
+    'ModelManager',
+    'create_manager_from_preset',
 ]

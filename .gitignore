@@ -7,3 +7,5 @@ Habermas Machine.pdf
 science.adq2852_sm.pdf
 science.adq2852.pdf
 *.log
+*.pyc
+/habermas_machine/core/__pycache__

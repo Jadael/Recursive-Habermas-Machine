@@ -51,10 +51,31 @@ except ImportError as e:
     )
     sys.exit(1)
 
+# Try importing the new model management system
+try:
+    from habermas_machine.core import (
+        create_manager_from_preset,
+        generate_opinion_only_cot_prompt,
+        ModelManager,
+        PROMPTED_DEEPSEEK,
+        PROMPTED_LLAMA,
+        PROMPTED_QWEN,
+    )
+    from habermas_machine.data.sample_statements import COMPULSORY_VOTING_OPINIONS
+    MODEL_MANAGEMENT_AVAILABLE = True
+    logger.info("Model management system loaded successfully")
+except ImportError as e:
+    MODEL_MANAGEMENT_AVAILABLE = False
+    logger.warning(f"Model management system not available: {e}")
+    logger.warning("Continuing with legacy mode")
+
 class HabermasMachine:
     def __init__(self, root):
         self.root = root
-        self.root.title("Habermas Machine - AI-Assisted Consensus Builder")
+        title = "Habermas Machine - AI-Assisted Consensus Builder"
+        if MODEL_MANAGEMENT_AVAILABLE:
+            title += " v2.0 (Enhanced)"
+        self.root.title(title)
         self.root.geometry("1800x900")
         
         # Configure dark theme
@@ -68,6 +89,11 @@ class HabermasMachine:
         self.candidate_statements = []
         self.election_results = {}
         self.session_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Model management (new)
+        self.model_manager = None
+        self.use_model_management = MODEL_MANAGEMENT_AVAILABLE
+        self.current_preset = "prompted_deepseek" if MODEL_MANAGEMENT_AVAILABLE else None
         
         # Default prompt templates
         self.default_templates = {
@@ -90,11 +116,17 @@ class HabermasMachine:
         self.create_layout()
         
         # Configure default values
-        self.model_var.set("mistral-small:24b")
-        self.temperature_var.set("0.7")
+        if MODEL_MANAGEMENT_AVAILABLE:
+            # Use preset defaults (silent during init)
+            self.apply_preset("prompted_deepseek", silent=True)
+        else:
+            # Legacy defaults
+            self.model_var.set("mistral-small:24b")
+            self.temperature_var.set("0.7")
+            self.ranking_temperature_var.set("0.6")
+
         self.top_p_var.set("0.9")
         self.top_k_var.set("40")
-        self.ranking_temperature_var.set("0.6")
         self.max_retries_var.set("3")  # Default for retries
         self.max_group_size_var.set("12")  # Default max group size
         self.num_candidates_var.set("4")  # Default number of candidates
@@ -264,7 +296,70 @@ class HabermasMachine:
         # Create a scrollable frame for settings
         settings_frame = ctk.CTkScrollableFrame(self.left_tabview.tab("Settings"))
         settings_frame.pack(fill="both", expand=True, padx=5, pady=5)
-        
+
+        # Model Management Section (NEW!)
+        if MODEL_MANAGEMENT_AVAILABLE:
+            model_mgmt_frame = ctk.CTkFrame(settings_frame)
+            model_mgmt_frame.pack(fill="x", pady=10, padx=5)
+
+            ctk.CTkLabel(
+                model_mgmt_frame,
+                text="🎯 Model Configuration (v2.0)",
+                font=("Arial", 14, "bold")
+            ).pack(pady=5)
+
+            # Preset selector
+            preset_frame = ctk.CTkFrame(model_mgmt_frame)
+            preset_frame.pack(fill="x", padx=10, pady=5)
+
+            ctk.CTkLabel(preset_frame, text="Preset:", font=("Arial", 12, "bold")).pack(side="left", padx=10)
+
+            self.preset_var = ctk.StringVar(value="prompted_deepseek")
+            preset_menu = ctk.CTkOptionMenu(
+                preset_frame,
+                variable=self.preset_var,
+                values=["prompted_deepseek", "prompted_llama", "prompted_qwen", "custom"],
+                command=self.on_preset_changed,
+                width=200,
+                font=("Arial", 12)
+            )
+            preset_menu.pack(side="left", padx=10, fill="x", expand=True)
+
+            # Preset description
+            self.preset_description = ctk.CTkLabel(
+                model_mgmt_frame,
+                text="DeepSeek-R1 14B (Recommended) - Optimal batching, minimal model loading",
+                font=("Arial", 10),
+                wraplength=400,
+                text_color="gray70"
+            )
+            self.preset_description.pack(pady=5, padx=10)
+
+            # Use DeepMind Prompts option
+            self.use_deepmind_prompts_var = ctk.BooleanVar(value=False)
+            deepmind_check = ctk.CTkCheckBox(
+                model_mgmt_frame,
+                text="📚 Use DeepMind Chain-of-Thought Prompts (Experimental)",
+                variable=self.use_deepmind_prompts_var,
+                command=self.on_deepmind_prompts_changed,
+                font=("Arial", 11)
+            )
+            deepmind_check.pack(pady=5, padx=10, anchor="w")
+
+            # Show statistics option
+            self.show_stats_var = ctk.BooleanVar(value=True)
+            stats_check = ctk.CTkCheckBox(
+                model_mgmt_frame,
+                text="📊 Show Performance Statistics",
+                variable=self.show_stats_var,
+                font=("Arial", 11)
+            )
+            stats_check.pack(pady=2, padx=10, anchor="w")
+
+            # Separator
+            separator = ctk.CTkFrame(settings_frame, height=2, fg_color="gray30")
+            separator.pack(fill="x", pady=10, padx=5)
+
         # Model selection
         model_frame = ctk.CTkFrame(settings_frame)
         model_frame.pack(fill="x", pady=5)
@@ -1883,6 +1978,90 @@ class HabermasMachine:
                 self.current_response.close()
             except:
                 pass
+
+    # Model Management Callbacks (NEW)
+    def on_preset_changed(self, preset_name):
+        """Handle preset selection change"""
+        if not MODEL_MANAGEMENT_AVAILABLE or preset_name == "custom":
+            return
+
+        self.apply_preset(preset_name)
+
+    def apply_preset(self, preset_name, silent=False):
+        """Apply a model management preset"""
+        if not MODEL_MANAGEMENT_AVAILABLE:
+            return
+
+        preset_configs = {
+            "prompted_deepseek": {
+                "model": "deepseek-r1:14b",
+                "description": "DeepSeek-R1 14B (Recommended) - Optimal batching, minimal model loading",
+                "statement_temp": "0.6",
+                "ranking_temp": "0.2"
+            },
+            "prompted_llama": {
+                "model": "llama3.1",
+                "description": "Llama 3.1 - Alternative prompted model with good performance",
+                "statement_temp": "0.6",
+                "ranking_temp": "0.2"
+            },
+            "prompted_qwen": {
+                "model": "qwen2.5:14b",
+                "description": "Qwen 2.5 14B - Alternative prompted model, fast inference",
+                "statement_temp": "0.6",
+                "ranking_temp": "0.2"
+            }
+        }
+
+        if preset_name in preset_configs:
+            config = preset_configs[preset_name]
+            self.model_var.set(config["model"])
+            self.temperature_var.set(config["statement_temp"])
+            self.ranking_temperature_var.set(config["ranking_temp"])
+
+            # Only update description if the widget exists
+            if hasattr(self, 'preset_description'):
+                self.preset_description.configure(text=config["description"])
+
+            self.current_preset = preset_name
+
+            # Show notification in friendly output (only if textbox exists and not silent)
+            if not silent and hasattr(self, 'friendly_output'):
+                try:
+                    self.log_to_friendly(f"\n🎯 Preset Applied: {preset_name}\n")
+                    self.log_to_friendly(f"Model: {config['model']}\n")
+                    self.log_to_friendly(f"Statement Temperature: {config['statement_temp']}\n")
+                    self.log_to_friendly(f"Ranking Temperature: {config['ranking_temp']}\n\n")
+                except:
+                    pass  # Textbox not ready yet
+
+            logger.info(f"Applied preset: {preset_name}")
+
+    def on_deepmind_prompts_changed(self):
+        """Handle DeepMind prompts checkbox change"""
+        if not MODEL_MANAGEMENT_AVAILABLE:
+            return
+
+        use_deepmind = self.use_deepmind_prompts_var.get()
+
+        # Only log if textbox exists
+        if hasattr(self, 'friendly_output'):
+            try:
+                if use_deepmind:
+                    self.log_to_friendly(
+                        "\n📚 DeepMind Chain-of-Thought Prompts Enabled\n"
+                        "Using production-tested prompts with structured <answer><sep></answer> format.\n"
+                        "Note: This is experimental and may require prompt template adjustments.\n\n"
+                    )
+                else:
+                    self.log_to_friendly(
+                        "\n📚 DeepMind Chain-of-Thought Prompts Disabled\n"
+                        "Using original prompt templates.\n\n"
+                    )
+            except:
+                pass  # Textbox not ready yet
+
+        logger.info(f"DeepMind prompts: {'enabled' if use_deepmind else 'disabled'}")
         
         self.log_to_friendly("\n**Process stopped by user.**\n")
         self.log_to_detailed("\n**Process stopped by user.**\n")
