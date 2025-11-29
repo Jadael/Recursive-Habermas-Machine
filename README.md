@@ -191,11 +191,11 @@ Currently limited to **"Questions and Opinions, not Proposals and Decisions."** 
 Recursive-Habermas-Machine/
 ├── main.py                      # Entry point
 ├── habermas_machine_app.py      # Main application (GUI + logic)
-├── habermas_machine/            # Package structure
-│   ├── core/                    # Consensus algorithms, voting, prompts
-│   ├── utils/                   # LLM client, embeddings, utilities
-│   └── data/                    # Sample data and questions
-├── docs/                        # Research papers and references
+├── requirements.txt             # Python dependencies
+├── docs/                        # Documentation and references
+│   ├── deepmind_reference/      # DeepMind's original code (Apache 2.0)
+│   └── *.md                     # Research papers
+├── tests/                       # Test scenarios
 ├── QUICKSTART.md               # Detailed usage guide
 ├── CLAUDE.md                   # Developer documentation
 └── TECHNICAL_DOCS.md           # Full code walkthrough
@@ -265,10 +265,19 @@ This project addresses democratic deliberation and consensus building—public g
 
 ## Acknowledgments
 
-- Google DeepMind for the original research
-- Jürgen Habermas for foundational work on deliberative democracy
-- The Ollama team for excellent local LLM infrastructure
-- CustomTkinter for the modern Python GUI framework
+- **Google DeepMind** for the original [Habermas Machine research](https://www.science.org/doi/10.1126/science.adq2852) (reference implementation included in `docs/deepmind_reference/` under Apache 2.0)
+- **Jürgen Habermas** for foundational work on deliberative democracy and communicative rationality
+- **The Ollama team** for excellent local LLM infrastructure
+- **CustomTkinter** for the modern Python GUI framework
+
+## License Clarification
+
+This project contains code under two different licenses:
+
+1. **Main application** (`habermas_machine_app.py`, `main.py`, etc.) - **AGPLv3**
+2. **DeepMind reference code** (`docs/deepmind_reference/`) - **Apache 2.0** (original DeepMind license)
+
+The main application is an independent implementation inspired by DeepMind's research but does not import or depend on their reference code. The reference implementation is included for educational purposes and developer reference.
 
 ---
 
