@@ -139,13 +139,14 @@ class HabermasMachine:
             # Use preset defaults (silent during init)
             self.apply_preset("prompted_deepseek", silent=True)
         else:
-            # Legacy defaults
-            self.model_var.set("mistral-small:24b")
-            self.temperature_var.set("0.7")
-            self.ranking_temperature_var.set("0.6")
+            # Legacy defaults - now using new separate variables
+            self.gen_model_var.set("deepseek-r1:14b")
+            self.rank_model_var.set("deepseek-r1:14b")
+            self.gen_temperature_var.set("0.7")
+            self.rank_temperature_var.set("0.6")
 
-        self.top_p_var.set("0.9")
-        self.top_k_var.set("40")
+        self.gen_top_p_var.set("0.9")
+        self.gen_top_k_var.set("40")
         self.max_retries_var.set("3")  # Default for retries
         self.max_group_size_var.set("12")  # Default max group size
         self.num_candidates_var.set("4")  # Default number of candidates
@@ -379,68 +380,116 @@ class HabermasMachine:
             separator = ctk.CTkFrame(settings_frame, height=2, fg_color="gray30")
             separator.pack(fill="x", pady=10, padx=5)
 
-        # Model selection
-        model_frame = ctk.CTkFrame(settings_frame)
-        model_frame.pack(fill="x", pady=5)
-        
-        ctk.CTkLabel(model_frame, text="Model:", anchor="w", font=("Arial", 12, "bold")).pack(side="left", padx=10)
-        self.model_var = ctk.StringVar()
-        self.model_entry = ctk.CTkEntry(model_frame, textvariable=self.model_var, width=200, font=("Arial", 12))
-        self.model_entry.pack(side="left", padx=10, fill="x", expand=True)
-        
-        # Generation parameters section
-        gen_params_frame = ctk.CTkFrame(settings_frame)
-        gen_params_frame.pack(fill="x", pady=10, padx=5)
-        
-        ctk.CTkLabel(gen_params_frame, text="Generation Parameters", font=("Arial", 14, "bold")).pack(pady=5)
-        
-        params_grid = ctk.CTkFrame(gen_params_frame)
-        params_grid.pack(fill="x", padx=10, pady=5, expand=True)
-        
-        # Temperature
-        ctk.CTkLabel(params_grid, text="Temperature:", font=("Arial", 12)).grid(row=0, column=0, padx=10, pady=5, sticky="w")
-        self.temperature_var = ctk.StringVar()
-        self.temperature_entry = ctk.CTkEntry(params_grid, textvariable=self.temperature_var, width=60, font=("Arial", 12))
-        self.temperature_entry.grid(row=0, column=1, padx=10, pady=5, sticky="w")
-        
-        # Top P
-        ctk.CTkLabel(params_grid, text="Top P:", font=("Arial", 12)).grid(row=1, column=0, padx=10, pady=5, sticky="w")
-        self.top_p_var = ctk.StringVar()
-        self.top_p_entry = ctk.CTkEntry(params_grid, textvariable=self.top_p_var, width=60, font=("Arial", 12))
-        self.top_p_entry.grid(row=1, column=1, padx=10, pady=5, sticky="w")
-        
-        # Top K
-        ctk.CTkLabel(params_grid, text="Top K:", font=("Arial", 12)).grid(row=2, column=0, padx=10, pady=5, sticky="w")
-        self.top_k_var = ctk.StringVar()
-        self.top_k_entry = ctk.CTkEntry(params_grid, textvariable=self.top_k_var, width=60, font=("Arial", 12))
-        self.top_k_entry.grid(row=2, column=1, padx=10, pady=5, sticky="w")
-        
-        # Number of candidate statements
-        ctk.CTkLabel(params_grid, text="Candidate Statements:", font=("Arial", 12)).grid(row=0, column=2, padx=10, pady=5, sticky="w")
+        # === API Configuration Info ===
+        api_info_frame = ctk.CTkFrame(settings_frame)
+        api_info_frame.pack(fill="x", pady=5, padx=5)
+
+        info_text = "💡 Configure separate API endpoints and models for statement generation vs. ranking prediction.\nSupports OpenAI-compatible APIs (Ollama, LM Studio, vLLM, etc.)"
+        ctk.CTkLabel(
+            api_info_frame,
+            text=info_text,
+            font=("Arial", 10),
+            text_color="gray70",
+            wraplength=500,
+            justify="left"
+        ).pack(pady=5, padx=10)
+
+        # === GENERATION API SETTINGS ===
+        gen_api_frame = ctk.CTkFrame(settings_frame)
+        gen_api_frame.pack(fill="x", pady=10, padx=5)
+
+        ctk.CTkLabel(gen_api_frame, text="🔧 Statement Generation API", font=("Arial", 14, "bold")).pack(pady=5)
+
+        # Generation API endpoint
+        gen_endpoint_frame = ctk.CTkFrame(gen_api_frame)
+        gen_endpoint_frame.pack(fill="x", padx=10, pady=5)
+        ctk.CTkLabel(gen_endpoint_frame, text="API Endpoint:", font=("Arial", 12, "bold")).pack(side="left", padx=10)
+        self.gen_api_endpoint_var = ctk.StringVar(value="http://localhost:11434/api/generate")
+        self.gen_api_endpoint_entry = ctk.CTkEntry(gen_endpoint_frame, textvariable=self.gen_api_endpoint_var, width=350, font=("Arial", 11))
+        self.gen_api_endpoint_entry.pack(side="left", padx=10, fill="x", expand=True)
+
+        # Generation model
+        gen_model_frame = ctk.CTkFrame(gen_api_frame)
+        gen_model_frame.pack(fill="x", padx=10, pady=5)
+        ctk.CTkLabel(gen_model_frame, text="Model:", font=("Arial", 12, "bold")).pack(side="left", padx=10)
+        self.gen_model_var = ctk.StringVar()
+        self.gen_model_entry = ctk.CTkEntry(gen_model_frame, textvariable=self.gen_model_var, width=200, font=("Arial", 12))
+        self.gen_model_entry.pack(side="left", padx=10, fill="x", expand=True)
+
+        # Generation parameters
+        gen_params_grid = ctk.CTkFrame(gen_api_frame)
+        gen_params_grid.pack(fill="x", padx=10, pady=5)
+
+        ctk.CTkLabel(gen_params_grid, text="Temperature:", font=("Arial", 11)).grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        self.gen_temperature_var = ctk.StringVar()
+        self.gen_temperature_entry = ctk.CTkEntry(gen_params_grid, textvariable=self.gen_temperature_var, width=60, font=("Arial", 11))
+        self.gen_temperature_entry.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+
+        ctk.CTkLabel(gen_params_grid, text="Top P:", font=("Arial", 11)).grid(row=0, column=2, padx=10, pady=5, sticky="w")
+        self.gen_top_p_var = ctk.StringVar()
+        self.gen_top_p_entry = ctk.CTkEntry(gen_params_grid, textvariable=self.gen_top_p_var, width=60, font=("Arial", 11))
+        self.gen_top_p_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
+
+        ctk.CTkLabel(gen_params_grid, text="Top K:", font=("Arial", 11)).grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        self.gen_top_k_var = ctk.StringVar()
+        self.gen_top_k_entry = ctk.CTkEntry(gen_params_grid, textvariable=self.gen_top_k_var, width=60, font=("Arial", 11))
+        self.gen_top_k_entry.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+
+        ctk.CTkLabel(gen_params_grid, text="Candidate Statements:", font=("Arial", 11)).grid(row=1, column=2, padx=10, pady=5, sticky="w")
         self.num_candidates_var = ctk.StringVar()
-        self.num_candidates_spinbox = ctk.CTkEntry(params_grid, textvariable=self.num_candidates_var, width=60, font=("Arial", 12))
-        self.num_candidates_spinbox.grid(row=0, column=3, padx=10, pady=5, sticky="w")
-        
-        # Ranking prediction parameters section
-        rank_params_frame = ctk.CTkFrame(settings_frame)
-        rank_params_frame.pack(fill="x", pady=10, padx=5)
-        
-        ctk.CTkLabel(rank_params_frame, text="Ranking Prediction Parameters", font=("Arial", 14, "bold")).pack(pady=5)
-        
-        rank_grid = ctk.CTkFrame(rank_params_frame)
-        rank_grid.pack(fill="x", padx=10, pady=5, expand=True)
-        
-        # Ranking temperature
-        ctk.CTkLabel(rank_grid, text="Temperature:", font=("Arial", 12)).grid(row=0, column=0, padx=10, pady=5, sticky="w")
-        self.ranking_temperature_var = ctk.StringVar()
-        self.ranking_temperature_entry = ctk.CTkEntry(rank_grid, textvariable=self.ranking_temperature_var, width=60, font=("Arial", 12))
-        self.ranking_temperature_entry.grid(row=0, column=1, padx=10, pady=5, sticky="w")
-        
-        # Maximum retries for JSON parsing
-        ctk.CTkLabel(rank_grid, text="Max JSON Retries:", font=("Arial", 12)).grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        self.num_candidates_spinbox = ctk.CTkEntry(gen_params_grid, textvariable=self.num_candidates_var, width=60, font=("Arial", 11))
+        self.num_candidates_spinbox.grid(row=1, column=3, padx=5, pady=5, sticky="w")
+
+        # Separator
+        separator1 = ctk.CTkFrame(settings_frame, height=2, fg_color="gray30")
+        separator1.pack(fill="x", pady=10, padx=5)
+
+        # === RANKING API SETTINGS ===
+        rank_api_frame = ctk.CTkFrame(settings_frame)
+        rank_api_frame.pack(fill="x", pady=10, padx=5)
+
+        ctk.CTkLabel(rank_api_frame, text="🎯 Ranking Prediction API", font=("Arial", 14, "bold")).pack(pady=5)
+
+        # Ranking API endpoint
+        rank_endpoint_frame = ctk.CTkFrame(rank_api_frame)
+        rank_endpoint_frame.pack(fill="x", padx=10, pady=5)
+        ctk.CTkLabel(rank_endpoint_frame, text="API Endpoint:", font=("Arial", 12, "bold")).pack(side="left", padx=10)
+        self.rank_api_endpoint_var = ctk.StringVar(value="http://localhost:11434/api/generate")
+        self.rank_api_endpoint_entry = ctk.CTkEntry(rank_endpoint_frame, textvariable=self.rank_api_endpoint_var, width=350, font=("Arial", 11))
+        self.rank_api_endpoint_entry.pack(side="left", padx=10, fill="x", expand=True)
+
+        # Ranking model
+        rank_model_frame = ctk.CTkFrame(rank_api_frame)
+        rank_model_frame.pack(fill="x", padx=10, pady=5)
+        ctk.CTkLabel(rank_model_frame, text="Model:", font=("Arial", 12, "bold")).pack(side="left", padx=10)
+        self.rank_model_var = ctk.StringVar()
+        self.rank_model_entry = ctk.CTkEntry(rank_model_frame, textvariable=self.rank_model_var, width=200, font=("Arial", 12))
+        self.rank_model_entry.pack(side="left", padx=10, fill="x", expand=True)
+
+        # Ranking parameters
+        rank_params_grid = ctk.CTkFrame(rank_api_frame)
+        rank_params_grid.pack(fill="x", padx=10, pady=5)
+
+        ctk.CTkLabel(rank_params_grid, text="Temperature:", font=("Arial", 11)).grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        self.rank_temperature_var = ctk.StringVar()
+        self.rank_temperature_entry = ctk.CTkEntry(rank_params_grid, textvariable=self.rank_temperature_var, width=60, font=("Arial", 11))
+        self.rank_temperature_entry.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+
+        ctk.CTkLabel(rank_params_grid, text="Max JSON Retries:", font=("Arial", 11)).grid(row=0, column=2, padx=10, pady=5, sticky="w")
         self.max_retries_var = ctk.StringVar()
-        self.max_retries_entry = ctk.CTkEntry(rank_grid, textvariable=self.max_retries_var, width=60, font=("Arial", 12))
-        self.max_retries_entry.grid(row=1, column=1, padx=10, pady=5, sticky="w")
+        self.max_retries_entry = ctk.CTkEntry(rank_params_grid, textvariable=self.max_retries_var, width=60, font=("Arial", 11))
+        self.max_retries_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
+
+        # Keep legacy variables for backward compatibility (point to new vars)
+        self.model_var = self.gen_model_var  # Legacy compatibility
+        self.temperature_var = self.gen_temperature_var  # Legacy compatibility
+        self.ranking_temperature_var = self.rank_temperature_var  # Legacy compatibility
+        self.top_p_var = self.gen_top_p_var  # Legacy compatibility
+        self.top_k_var = self.gen_top_k_var  # Legacy compatibility
+
+        # Separator
+        separator2 = ctk.CTkFrame(settings_frame, height=2, fg_color="gray30")
+        separator2.pack(fill="x", pady=10, padx=5)
         
         # Recursive Habermas settings
         recursive_frame = ctk.CTkFrame(settings_frame)
@@ -770,6 +819,9 @@ class HabermasMachine:
     
     def save_output(self, output_type):
         """Save the output to a file"""
+        # Create output directory if it doesn't exist
+        os.makedirs("output", exist_ok=True)
+
         # Default file types and initial filename
         if output_type == "friendly":
             filetypes = [("Text files", "*.txt"), ("Markdown files", "*.md"), ("All files", "*.*")]
@@ -779,12 +831,13 @@ class HabermasMachine:
             filetypes = [("Markdown files", "*.md"), ("Text files", "*.txt"), ("All files", "*.*")]
             initial_filename = f"habermas_detailed_{self.session_id}.md"
             content = self.detailed_output.get("1.0", "end-1c")
-        
-        # Ask user where to save
+
+        # Ask user where to save (suggest output directory)
         file_path = ctk.filedialog.asksaveasfilename(
             defaultextension=".md",
             filetypes=filetypes,
-            initialfile=initial_filename
+            initialfile=initial_filename,
+            initialdir="output"
         )
         
         if not file_path:
@@ -842,7 +895,8 @@ class HabermasMachine:
             self.log_to_detailed(f"# Consensus Process Detailed Record\n\n")
             self.log_to_detailed(f"**Session ID:** {self.session_id}  \n")
             self.log_to_detailed(f"**Time:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  \n")
-            self.log_to_detailed(f"**Model:** {self.model_var.get()}  \n")
+            self.log_to_detailed(f"**Generation Model:** {self.gen_model_var.get()} @ {self.gen_api_endpoint_var.get()}\n")
+            self.log_to_detailed(f"**Ranking Model:** {self.rank_model_var.get()} @ {self.rank_api_endpoint_var.get()}\n")
             self.log_to_detailed(f"**Process Type:** Single-run Consensus  \n\n")
             self.log_to_detailed(f"## Question\n\n{question}\n\n")
             self.log_to_detailed("## Original Participant Statements\n\n")
@@ -900,16 +954,19 @@ class HabermasMachine:
             # Auto save if enabled
             if self.save_output_var.get():
                 try:
+                    # Create output directory if it doesn't exist
+                    os.makedirs("output", exist_ok=True)
+
                     # Save friendly output
-                    friendly_path = f"habermas_results_{self.session_id}.md"
+                    friendly_path = os.path.join("output", f"habermas_results_{self.session_id}.md")
                     with open(friendly_path, 'w', encoding='utf-8') as file:
                         file.write(self.friendly_output.get("1.0", "end-1c"))
-                    
+
                     # Save detailed output
-                    detailed_path = f"habermas_detailed_{self.session_id}.md"
+                    detailed_path = os.path.join("output", f"habermas_detailed_{self.session_id}.md")
                     with open(detailed_path, 'w', encoding='utf-8') as file:
                         file.write(self.detailed_output.get("1.0", "end-1c"))
-                    
+
                     self.log_to_friendly(f"\n\n*Results automatically saved to {friendly_path}*\n")
                     self.log_to_detailed(f"\n\n*Detailed record automatically saved to {detailed_path}*\n")
                 except Exception as e:
@@ -979,21 +1036,22 @@ class HabermasMachine:
         # Update the debug prompt display
         self.root.after(0, lambda: self.update_debug_prompt(prompt))
         
-        # Prepare API call parameters
-        model = self.model_var.get()
+        # Prepare API call parameters - use generation-specific settings
+        model = self.gen_model_var.get()
+        api_endpoint = self.gen_api_endpoint_var.get()
         try:
-            temperature = float(self.temperature_var.get())
-            top_p = float(self.top_p_var.get())
-            top_k = int(self.top_k_var.get())
+            temperature = float(self.gen_temperature_var.get())
+            top_p = float(self.gen_top_p_var.get())
+            top_k = int(self.gen_top_k_var.get())
         except ValueError:
             temperature = 0.7
             top_p = 0.9
             top_k = 40
-            
+
         # Make the API call
         try:
             self.current_response = requests.post(
-                "http://localhost:11434/api/generate",
+                api_endpoint,
                 json={
                     "model": model,
                     "prompt": prompt,
@@ -1130,24 +1188,25 @@ class HabermasMachine:
         # Update the debug prompt display
         self.root.after(0, lambda: self.update_debug_prompt(f"System prompt:\n{system_prompt}\n\n---\n\nUser prompt:\n{prompt}"))
         
-        # Prepare API call parameters
-        model = self.model_var.get()
+        # Prepare API call parameters - use ranking-specific settings
+        model = self.rank_model_var.get()
+        api_endpoint = self.rank_api_endpoint_var.get()
         try:
-            temperature = float(self.ranking_temperature_var.get())
+            temperature = float(self.rank_temperature_var.get())
         except ValueError:
             temperature = 0.2  # Lower temperature for more deterministic ranking prediction
-        
+
         # Keep track of retry attempts
         attempts = 0
         attempts_log = []
-        
+
         while attempts < max_retries:
             attempts += 1
-            
+
             # Make the API call with system prompt
             try:
                 self.current_response = requests.post(
-                    "http://localhost:11434/api/generate",
+                    api_endpoint,
                     json={
                         "model": model,
                         "prompt": prompt,
@@ -1530,7 +1589,8 @@ class HabermasMachine:
             self.log_to_detailed(f"# Recursive Consensus Process Detailed Record\n\n")
             self.log_to_detailed(f"**Session ID:** {self.session_id}  \n")
             self.log_to_detailed(f"**Time:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  \n")
-            self.log_to_detailed(f"**Model:** {self.model_var.get()}  \n")
+            self.log_to_detailed(f"**Generation Model:** {self.gen_model_var.get()} @ {self.gen_api_endpoint_var.get()}\n")
+            self.log_to_detailed(f"**Ranking Model:** {self.rank_model_var.get()} @ {self.rank_api_endpoint_var.get()}\n")
             self.log_to_detailed(f"**Process Type:** Recursive Consensus  \n")
             self.log_to_detailed(f"**Max Group Size:** {max_group_size}  \n")
             self.log_to_detailed(f"**Voting Strategy:** {voting_strategy}  \n\n")
@@ -1593,16 +1653,19 @@ class HabermasMachine:
             # Auto save if enabled
             if self.save_output_var.get():
                 try:
+                    # Create output directory if it doesn't exist
+                    os.makedirs("output", exist_ok=True)
+
                     # Save friendly output
-                    friendly_path = f"habermas_recursive_results_{self.session_id}.md"
+                    friendly_path = os.path.join("output", f"habermas_recursive_results_{self.session_id}.md")
                     with open(friendly_path, 'w', encoding='utf-8') as file:
                         file.write(self.friendly_output.get("1.0", "end-1c"))
-                    
+
                     # Save detailed output
-                    detailed_path = f"habermas_recursive_detailed_{self.session_id}.md"
+                    detailed_path = os.path.join("output", f"habermas_recursive_detailed_{self.session_id}.md")
                     with open(detailed_path, 'w', encoding='utf-8') as file:
                         file.write(self.detailed_output.get("1.0", "end-1c"))
-                    
+
                     self.log_to_friendly(f"\n\n*Results automatically saved to {friendly_path}*\n")
                     self.log_to_detailed(f"\n\n*Detailed record automatically saved to {detailed_path}*\n")
                 except Exception as e:
@@ -2034,9 +2097,11 @@ class HabermasMachine:
 
         if preset_name in preset_configs:
             config = preset_configs[preset_name]
-            self.model_var.set(config["model"])
-            self.temperature_var.set(config["statement_temp"])
-            self.ranking_temperature_var.set(config["ranking_temp"])
+            # Apply to both generation and ranking models
+            self.gen_model_var.set(config["model"])
+            self.rank_model_var.set(config["model"])
+            self.gen_temperature_var.set(config["statement_temp"])
+            self.rank_temperature_var.set(config["ranking_temp"])
 
             # Only update description if the widget exists
             if hasattr(self, 'preset_description'):
