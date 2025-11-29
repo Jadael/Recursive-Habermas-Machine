@@ -1,11 +1,54 @@
-/output
-/tests
-*.md
-Habermas Machine.pdf
-/__pycache__
-.vscode/settings.json
+# Output files
+/output/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Claude Code
+.claude/
+
+# Project specific
 science.adq2852_sm.pdf
 science.adq2852.pdf
-*.log
-*.pyc
-/habermas_machine/core/__pycache__
+Habermas Machine.pdf
+
+# Sensitive data
+.env
+.env.local
+*.key
+*_secret*
+*_token*
