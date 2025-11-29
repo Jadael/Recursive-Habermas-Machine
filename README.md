@@ -247,7 +247,21 @@ This is currently a personal portfolio project. If you're interested in collabor
 
 ## License
 
-See [LICENSE](LICENSE) file for details.
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPLv3)**.
+
+This means:
+- ✅ You can use, modify, and distribute this software
+- ✅ You can use it for commercial purposes
+- ⚠️ If you modify and deploy this software as a network service, you **must** make your modified source code available to users
+- ⚠️ Any derivative works must also be licensed under AGPLv3
+
+The AGPL is specifically designed for software that runs as a network service. If you deploy a modified version of the Habermas Machine as a web service, API, or other network-accessible application, you must provide the complete source code to your users.
+
+See [LICENSE](LICENSE) for the full legal text.
+
+### Why AGPLv3?
+
+This project addresses democratic deliberation and consensus building—public goods that benefit from transparency and collaborative improvement. The AGPL ensures that improvements to the system remain available to the community, even when deployed as a service.
 
 ## Acknowledgments
 
