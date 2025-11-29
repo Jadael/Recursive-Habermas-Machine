@@ -918,8 +918,8 @@ class HabermasMachine:
                 return
             
             if not self.candidate_statements:
-                self.log_to_friendly("**Error:** Failed to generate candidate statements.\n\n")
-                self.log_to_detailed("**Error:** Failed to generate candidate statements.\n\n")
+                self.log_to_friendly("**Error:** Failed to generate any candidate statements. See error details above.\n\n")
+                self.log_to_detailed("**Error:** Failed to generate any candidate statements. Check individual candidate generation errors above.\n\n")
                 self.cleanup_after_process()
                 return
             
@@ -1066,7 +1066,12 @@ class HabermasMachine:
             )
             
             if self.current_response.status_code != 200:
-                error_msg = f"API Error: Status code {self.current_response.status_code}"
+                try:
+                    error_detail = self.current_response.text
+                except:
+                    error_detail = "Unable to read error details"
+                error_msg = f"API Error: Status code {self.current_response.status_code}\n{error_detail}"
+                self.log_to_friendly(f"**Error generating candidate {candidate_num}:** {error_msg}\n\n")
                 self.log_to_detailed(f"**Error:** {error_msg}\n\n")
                 logger.error(error_msg)
                 return None
@@ -1086,8 +1091,10 @@ class HabermasMachine:
                             
                             # Update the debug response display
                             self.root.after(0, lambda r=full_response: self.update_debug_response(r))
-                    except json.JSONDecodeError:
-                        self.log_to_detailed("**Error:** Failed to decode response from Ollama API\n\n")
+                    except json.JSONDecodeError as e:
+                        error_msg = f"Failed to decode response from Ollama API: {str(e)}"
+                        self.log_to_friendly(f"**Error:** {error_msg}\n\n")
+                        self.log_to_detailed(f"**Error:** {error_msg}\n\n")
                 
             # Log the response
             self.log_to_detailed(f"**Raw Response for Candidate {candidate_num}:**\n\n```\n{full_response}\n```\n\n")
@@ -1099,7 +1106,8 @@ class HabermasMachine:
             
         except Exception as e:
             error_msg = f"Error generating candidate {candidate_num}: {str(e)}"
-            self.log_to_detailed(f"**Error:** {error_msg}\n\n")
+            self.log_to_friendly(f"**Error:** {error_msg}\n\n")
+            self.log_to_detailed(f"**Error:** {error_msg}\n\nStacktrace:\n```\n{traceback.format_exc()}\n```\n\n")
             logger.error(error_msg, exc_info=True)
             return None
         finally:
@@ -1220,8 +1228,13 @@ class HabermasMachine:
                 )
                 
                 if self.current_response.status_code != 200:
-                    attempt_error = f"Attempt {attempts}: API Error: Status code {self.current_response.status_code}"
+                    try:
+                        error_detail = self.current_response.text
+                    except:
+                        error_detail = "Unable to read error details"
+                    attempt_error = f"Attempt {attempts}: API Error: Status code {self.current_response.status_code}\n{error_detail}"
                     attempts_log.append(attempt_error)
+                    self.log_to_friendly(f"**Ranking prediction error for Participant {participant_num}:** {attempt_error}\n\n")
                     self.log_to_detailed(f"**{attempt_error}**\n\n")
                     continue
                 
@@ -1286,12 +1299,14 @@ class HabermasMachine:
                 
             except Exception as e:
                 attempts_log.append(f"Attempt {attempts}: Exception: {str(e)}")
-                self.log_to_detailed(f"**Exception:** {str(e)}\n\n")
+                self.log_to_friendly(f"**Ranking prediction exception for Participant {participant_num}:** {str(e)}\n\n")
+                self.log_to_detailed(f"**Exception:** {str(e)}\n\nStacktrace:\n```\n{traceback.format_exc()}\n```\n\n")
             finally:
                 self.current_response = None
         
         # If we get here, all attempts failed
         attempts_log.append("All attempts failed. Falling back to random ranking.")
+        self.log_to_friendly(f"**Warning:** Failed to predict ranking for Participant {participant_num} after {max_retries} attempts. Using random ranking as fallback.\n\n")
         self.log_to_detailed("**All attempts failed. Falling back to random ranking.**\n\n")
         
         # Fallback to a random ranking
