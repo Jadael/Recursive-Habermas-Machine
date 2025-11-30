@@ -106,11 +106,11 @@ class HabermasMachine:
             title += " v2.0 (Enhanced)"
         self.root.title(title)
         self.root.geometry("1800x900")
-        
+
         # Configure dark theme
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
-        
+
         # State management
         self.stop_event = Event()
         self.current_response = None
@@ -123,6 +123,9 @@ class HabermasMachine:
         self.model_manager = None
         self.use_model_management = MODEL_MANAGEMENT_AVAILABLE
         self.current_preset = "prompted_deepseek" if MODEL_MANAGEMENT_AVAILABLE else None
+
+        # Settings file path
+        self.settings_file = "habermas_settings.json"
         
         # Default prompt templates (based on DeepMind's methodology but voice-neutral)
         self.default_templates = {
@@ -195,23 +198,14 @@ The ranking array must contain integers 1 through {num_candidates}, ordered from
         
         # Create main layout
         self.create_layout()
-        
-        # Configure default values
-        if MODEL_MANAGEMENT_AVAILABLE:
-            # Use preset defaults (silent during init)
-            self.apply_preset("prompted_deepseek", silent=True)
-        else:
-            # Legacy defaults - now using new separate variables
-            self.gen_model_var.set("deepseek-r1:14b")
-            self.rank_model_var.set("deepseek-r1:14b")
-            self.gen_temperature_var.set("0.7")
-            self.rank_temperature_var.set("0.6")
 
-        self.gen_top_p_var.set("0.9")
-        self.gen_top_k_var.set("40")
-        self.max_retries_var.set("3")  # Default for retries
-        self.max_group_size_var.set("12")  # Default max group size
-        self.num_candidates_var.set("4")  # Default number of candidates
+        # Define default settings
+        self.default_settings = self.get_default_settings()
+
+        # Try to load saved settings, otherwise use defaults
+        if not self.load_settings():
+            self.apply_default_settings()
+
         self.question_text.insert("1.0", "Should voting be compulsory?")
         
         # Set prompt templates in the UI
@@ -240,7 +234,118 @@ The ranking array must contain integers 1 through {num_candidates}, ordered from
         self.participants_text.delete("1.0", "end")
         self.participants_text.insert("1.0", "\n".join(sample_participants))
         self.update_participant_count()
-    
+
+    def get_default_settings(self):
+        """Return the default settings dictionary"""
+        if MODEL_MANAGEMENT_AVAILABLE:
+            # Use model management defaults
+            default_gen_model = "llama3.2:3b"
+            default_rank_model = "llama3.2:3b"
+            default_gen_temp = "0.7"
+            default_rank_temp = "0.6"
+        else:
+            # Legacy defaults
+            default_gen_model = "llama3.2:3b"
+            default_rank_model = "llama3.2:3b"
+            default_gen_temp = "0.7"
+            default_rank_temp = "0.6"
+
+        return {
+            "gen_api_endpoint": "http://localhost:11434/api/generate",
+            "rank_api_endpoint": "http://localhost:11434/api/generate",
+            "gen_model": default_gen_model,
+            "rank_model": default_rank_model,
+            "gen_temperature": default_gen_temp,
+            "rank_temperature": default_rank_temp,
+            "gen_top_p": "0.9",
+            "gen_top_k": "40",
+            "max_retries": "3",
+            "max_group_size": "12",
+            "num_candidates": "4",
+        }
+
+    def apply_default_settings(self):
+        """Apply the default settings to the UI"""
+        if MODEL_MANAGEMENT_AVAILABLE:
+            # Use preset defaults (silent during init)
+            self.apply_preset("prompted_deepseek", silent=True)
+            # Override with our new defaults
+            self.gen_model_var.set(self.default_settings["gen_model"])
+            self.rank_model_var.set(self.default_settings["rank_model"])
+        else:
+            # Apply all defaults
+            self.gen_model_var.set(self.default_settings["gen_model"])
+            self.rank_model_var.set(self.default_settings["rank_model"])
+            self.gen_temperature_var.set(self.default_settings["gen_temperature"])
+            self.rank_temperature_var.set(self.default_settings["rank_temperature"])
+
+        self.gen_api_endpoint_var.set(self.default_settings["gen_api_endpoint"])
+        self.rank_api_endpoint_var.set(self.default_settings["rank_api_endpoint"])
+        self.gen_top_p_var.set(self.default_settings["gen_top_p"])
+        self.gen_top_k_var.set(self.default_settings["gen_top_k"])
+        self.max_retries_var.set(self.default_settings["max_retries"])
+        self.max_group_size_var.set(self.default_settings["max_group_size"])
+        self.num_candidates_var.set(self.default_settings["num_candidates"])
+
+    def load_settings(self):
+        """Load settings from JSON file. Returns True if successful, False otherwise."""
+        try:
+            if os.path.exists(self.settings_file):
+                with open(self.settings_file, 'r') as f:
+                    settings = json.load(f)
+
+                # Apply loaded settings
+                self.gen_api_endpoint_var.set(settings.get("gen_api_endpoint", self.default_settings["gen_api_endpoint"]))
+                self.rank_api_endpoint_var.set(settings.get("rank_api_endpoint", self.default_settings["rank_api_endpoint"]))
+                self.gen_model_var.set(settings.get("gen_model", self.default_settings["gen_model"]))
+                self.rank_model_var.set(settings.get("rank_model", self.default_settings["rank_model"]))
+                self.gen_temperature_var.set(settings.get("gen_temperature", self.default_settings["gen_temperature"]))
+                self.rank_temperature_var.set(settings.get("rank_temperature", self.default_settings["rank_temperature"]))
+                self.gen_top_p_var.set(settings.get("gen_top_p", self.default_settings["gen_top_p"]))
+                self.gen_top_k_var.set(settings.get("gen_top_k", self.default_settings["gen_top_k"]))
+                self.max_retries_var.set(settings.get("max_retries", self.default_settings["max_retries"]))
+                self.max_group_size_var.set(settings.get("max_group_size", self.default_settings["max_group_size"]))
+                self.num_candidates_var.set(settings.get("num_candidates", self.default_settings["num_candidates"]))
+
+                logger.info(f"Settings loaded from {self.settings_file}")
+                return True
+            else:
+                logger.info(f"No settings file found at {self.settings_file}, using defaults")
+                return False
+        except Exception as e:
+            logger.error(f"Error loading settings: {e}")
+            return False
+
+    def save_settings(self):
+        """Save current settings to JSON file"""
+        try:
+            settings = {
+                "gen_api_endpoint": self.gen_api_endpoint_var.get(),
+                "rank_api_endpoint": self.rank_api_endpoint_var.get(),
+                "gen_model": self.gen_model_var.get(),
+                "rank_model": self.rank_model_var.get(),
+                "gen_temperature": self.gen_temperature_var.get(),
+                "rank_temperature": self.rank_temperature_var.get(),
+                "gen_top_p": self.gen_top_p_var.get(),
+                "gen_top_k": self.gen_top_k_var.get(),
+                "max_retries": self.max_retries_var.get(),
+                "max_group_size": self.max_group_size_var.get(),
+                "num_candidates": self.num_candidates_var.get(),
+            }
+
+            with open(self.settings_file, 'w') as f:
+                json.dump(settings, f, indent=2)
+
+            logger.info(f"Settings saved to {self.settings_file}")
+        except Exception as e:
+            logger.error(f"Error saving settings: {e}")
+
+    def restore_default_settings(self):
+        """Restore all settings to default values"""
+        self.apply_default_settings()
+        self.save_settings()
+        logger.info("Settings restored to defaults")
+
     def create_layout(self):
         # Configure grid layout with 3 columns
         self.root.grid_columnconfigure(0, weight=1)  # Left: Settings & Inputs
@@ -602,7 +707,50 @@ The ranking array must contain integers 1 through {num_candidates}, ordered from
             font=("Arial", 12)
         )
         all_elections_radio.pack(anchor="w", pady=2)
-        
+
+        # Separator
+        separator3 = ctk.CTkFrame(settings_frame, height=2, fg_color="gray30")
+        separator3.pack(fill="x", pady=10, padx=5)
+
+        # Settings management section
+        settings_mgmt_frame = ctk.CTkFrame(settings_frame)
+        settings_mgmt_frame.pack(fill="x", pady=10, padx=5)
+
+        ctk.CTkLabel(settings_mgmt_frame, text="⚙️ Settings Management", font=("Arial", 14, "bold")).pack(pady=5)
+
+        settings_buttons = ctk.CTkFrame(settings_mgmt_frame)
+        settings_buttons.pack(fill="x", padx=10, pady=5)
+
+        save_settings_btn = ctk.CTkButton(
+            settings_buttons,
+            text="💾 Save Settings",
+            command=self.save_settings,
+            font=("Arial", 12),
+            fg_color="green",
+            hover_color="darkgreen"
+        )
+        save_settings_btn.pack(side="left", padx=10, pady=5)
+
+        restore_defaults_btn = ctk.CTkButton(
+            settings_buttons,
+            text="🔄 Restore Defaults",
+            command=self.restore_default_settings,
+            font=("Arial", 12),
+            fg_color="orange",
+            hover_color="darkorange"
+        )
+        restore_defaults_btn.pack(side="left", padx=10, pady=5)
+
+        settings_info = ctk.CTkLabel(
+            settings_mgmt_frame,
+            text="Settings are automatically loaded on startup. Click 'Save Settings' to persist your changes.",
+            font=("Arial", 10),
+            text_color="gray70",
+            wraplength=500,
+            justify="left"
+        )
+        settings_info.pack(pady=5, padx=10)
+
         # Output options
         output_frame = ctk.CTkFrame(settings_frame)
         output_frame.pack(fill="x", pady=10, padx=5)
