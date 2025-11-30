@@ -88,6 +88,16 @@ except ImportError as e:
     logger.warning(f"Model management system not available: {e}")
     logger.warning("Continuing with legacy mode")
 
+# Try importing enhanced UI components
+try:
+    from habermas_machine.ui import EnhancedTextbox
+    ENHANCED_UI_AVAILABLE = True
+    logger.info("Enhanced UI components loaded successfully")
+except ImportError as e:
+    ENHANCED_UI_AVAILABLE = False
+    logger.warning(f"Enhanced UI components not available: {e}")
+    logger.warning("Continuing with standard textboxes")
+
 class HabermasMachine:
     def __init__(self, root):
         self.root = root
@@ -265,7 +275,17 @@ class HabermasMachine:
         self.participant_count_label.pack(side="right", padx=5)
         
         # Create the participants textbox - in a separate row that can expand
-        self.participants_text = ctk.CTkTextbox(participants_frame, wrap="word", font=("Arial", 12))
+        if ENHANCED_UI_AVAILABLE:
+            self.participants_text = EnhancedTextbox(
+                participants_frame,
+                wrap="word",
+                font=("Arial", 12),
+                line_spacing=8,        # Gap between entries
+                line_padding=6,        # Vertical padding within each entry
+                horizontal_padding=12  # Left/right margins for card appearance
+            )
+        else:
+            self.participants_text = ctk.CTkTextbox(participants_frame, wrap="word", font=("Arial", 12))
         self.participants_text.grid(row=1, column=0, sticky="nsew", padx=0, pady=(0, 5))
         
         # Add text changed callback to update participant count
