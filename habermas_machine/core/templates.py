@@ -20,41 +20,68 @@ from typing import Dict
 # Default Prompt Templates
 # ============================================================================
 
-DEFAULT_CANDIDATE_GENERATION_TEMPLATE = """Given these participant statements, please combine these statements into a single group statement that synthesizes their viewpoints and includes all their individual points and concerns. This should represent a fair consensus or position that most participants could accept, and be representative of all details, concerns, suggestions, or questions from all participants, even if that make the combined statement longer. Your response will be used verbatim as the statement, so do not include any preamble or postscript.
+DEFAULT_CANDIDATE_GENERATION_TEMPLATE = """Your task is to synthesize a consensus statement from multiple individual opinions on a question. The statement should capture common ground and shared perspectives while respecting each person's viewpoint.
 
----
+The statement should be written in the voice of the group expressing their collective view (e.g., "We believe...", "Our position is..."), not as an outside description of what they think.
 
-# {question}
+Key requirements:
+- The statement must NOT conflict with any individual opinion
+- Identify key themes and points of agreement across the opinions
+- Include relevant details, concerns, and suggestions that appear across multiple opinions
+- Use natural language that reflects the tone and style of the original opinions
+- Write as the group, not about the group
 
----
+Process:
+1. Note recurring themes and shared values
+2. Identify areas of agreement and how different perspectives relate
+3. Synthesize a statement that represents this common ground
+4. Ensure no individual opinion is contradicted
 
+Example: If several opinions emphasize accessible public services while others focus on fiscal responsibility, a good synthesis might be "We support expanding public services while maintaining fiscal responsibility" rather than "There is consensus that services and budgets both matter."
+
+Question: {question}
+
+Individual Opinions:
 {participant_statements}
 
----
+You may include reasoning or notes before the final statement if helpful. Provide your response in this format:
 
-"""
+---REASONING---
+[Optional: Your analysis and reasoning process]
 
-DEFAULT_RANKING_PREDICTION_TEMPLATE = """Given this participant's statement, predict how this participant would rank these group statements from most preferred (1) to least preferred ({num_candidates}).
+---STATEMENT---
+[The actual consensus statement that will be used]"""
 
+DEFAULT_RANKING_PREDICTION_TEMPLATE = """Predict how a person would rank these consensus statements based on their individual opinion. Consider how well each statement aligns with their stated values and priorities.
 
+Process:
+1. Identify the key values, priorities, and concerns in their opinion
+2. For each statement, assess alignment with those values
+3. Consider both what they explicitly support and what might concern them
+4. Rank from most to least aligned with their perspective
 
-# {question}
+Example: Someone emphasizing practical action would likely prefer statements with concrete steps over abstract principles, while someone focused on long-term values might rank differently.
 
-## Participant's original statement: {participant_statement}
+Question: {question}
 
-## Group Statements to Rank:
+Participant's Opinion: {participant_statement}
 
+Statements to Rank:
 {candidate_statements}
 
+Predict their ranking from most preferred (1) to least preferred ({num_candidates}).
 
+You may include reasoning before the final ranking if helpful. Provide your response in this format:
 
-Based on the participant's original statement, predict their ranking of these group statements from most preferred to least preferred as a JSON object:
+---REASONING---
+[Optional: Your analysis of how the participant would view each statement]
 
+---RANKING---
 {{
-  "ranking": [1, 2, etc.]
+  "ranking": [1, 2, 3, ...]
 }}
 
-Important: Your response MUST contain ONLY a valid JSON object with a list of positive integer rankings under the key "ranking", NOT a list of statements, and must align with how this participant would rank them; e.g. how aligned they are with this participant's stance and priorities. Index starts at 1, not 0."""
+The ranking array must contain integers 1 through {num_candidates}, ordered from most to least preferred."""
 
 
 # ============================================================================
@@ -89,6 +116,96 @@ def get_default_templates() -> Dict[str, str]:
         "candidate_generation": DEFAULT_CANDIDATE_GENERATION_TEMPLATE,
         "ranking_prediction": DEFAULT_RANKING_PREDICTION_TEMPLATE
     }
+
+
+# ============================================================================
+# Response Extraction Utilities
+# ============================================================================
+
+def extract_statement_from_response(response: str) -> str:
+    """
+    Extract the consensus statement from a structured response.
+
+    Looks for content after ---STATEMENT--- marker. If not found,
+    falls back to using the entire response (for backwards compatibility
+    or when models ignore the structure).
+
+    Args:
+        response: Raw LLM response
+
+    Returns:
+        Extracted statement string (stripped of whitespace)
+
+    Example:
+        >>> response = "---REASONING---\\nSome thoughts\\n---STATEMENT---\\nWe agree."
+        >>> extract_statement_from_response(response)
+        'We agree.'
+        >>> extract_statement_from_response("Just a plain statement")
+        'Just a plain statement'
+    """
+    import re
+
+    # Try to find ---STATEMENT--- section
+    match = re.search(r'---STATEMENT---\s*(.+)', response, re.DOTALL | re.IGNORECASE)
+
+    if match:
+        statement = match.group(1).strip()
+        # Remove any trailing markers or artifacts
+        statement = re.sub(r'\s*---\w+---.*$', '', statement, flags=re.DOTALL)
+        return statement
+
+    # Fallback: use entire response, but try to clean obvious reasoning sections
+    cleaned = re.sub(r'^---REASONING---.*?(?=---STATEMENT---|$)', '', response, flags=re.DOTALL | re.IGNORECASE)
+    return cleaned.strip()
+
+
+def extract_ranking_from_response(response: str) -> tuple[dict | None, str]:
+    """
+    Extract the JSON ranking from a structured response.
+
+    Looks for content after ---RANKING--- marker first, then falls back
+    to searching the entire response for JSON.
+
+    Args:
+        response: Raw LLM response
+
+    Returns:
+        Tuple of (ranking_dict, reasoning_text)
+        - ranking_dict: Parsed JSON object or None if parsing failed
+        - reasoning_text: Any reasoning provided before the ranking
+
+    Example:
+        >>> response = "---REASONING---\\nThey prefer A\\n---RANKING---\\n{\\"ranking\\": [1,2]}"
+        >>> extract_ranking_from_response(response)
+        ({'ranking': [1, 2]}, 'They prefer A')
+    """
+    import re
+    import json
+
+    # Try to extract reasoning section
+    reasoning_match = re.search(r'---REASONING---\s*(.+?)(?=---RANKING---|$)', response, re.DOTALL | re.IGNORECASE)
+    reasoning = reasoning_match.group(1).strip() if reasoning_match else ""
+
+    # Try to find ---RANKING--- section
+    ranking_match = re.search(r'---RANKING---\s*(.+)', response, re.DOTALL | re.IGNORECASE)
+
+    if ranking_match:
+        json_text = ranking_match.group(1).strip()
+    else:
+        # Fallback: search entire response
+        json_text = response
+
+    # Extract JSON object from the text
+    json_match = re.search(r'\{[^}]*"ranking"[^}]*\}', json_text, re.DOTALL)
+
+    if json_match:
+        try:
+            ranking_dict = json.loads(json_match.group(0))
+            return ranking_dict, reasoning
+        except json.JSONDecodeError:
+            pass
+
+    return None, reasoning
 
 
 # ============================================================================

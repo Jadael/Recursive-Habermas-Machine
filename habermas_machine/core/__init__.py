@@ -22,6 +22,8 @@ from habermas_machine.core.templates import (
     format_candidate_statements,
     validate_candidate_template,
     validate_ranking_template,
+    extract_statement_from_response,
+    extract_ranking_from_response,
     DEFAULT_CANDIDATE_GENERATION_TEMPLATE,
     DEFAULT_RANKING_PREDICTION_TEMPLATE
 )
@@ -42,6 +44,8 @@ __all__ = [
     'format_candidate_statements',
     'validate_candidate_template',
     'validate_ranking_template',
+    'extract_statement_from_response',
+    'extract_ranking_from_response',
     'DEFAULT_CANDIDATE_GENERATION_TEMPLATE',
     'DEFAULT_RANKING_PREDICTION_TEMPLATE',
 ]

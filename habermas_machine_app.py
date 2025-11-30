@@ -124,18 +124,70 @@ class HabermasMachine:
         self.use_model_management = MODEL_MANAGEMENT_AVAILABLE
         self.current_preset = "prompted_deepseek" if MODEL_MANAGEMENT_AVAILABLE else None
         
-        # Default prompt templates
+        # Default prompt templates (based on DeepMind's methodology but voice-neutral)
         self.default_templates = {
-            "candidate_generation": "Given these participant statements, please combine these statements into a single group statement that synthesizes their viewpoints and includes all their individual points and concerns. This should represent a fair consensus or position that most participants could accept, and be representative of all details, concerns, suggestions, or questions from all participants, even if that make the combined statement longer. Your response will be used verbatim as the statement, so do not include any preamble or postscript.\n\n"
-                                  "---\n\n# {question}\n\n"
-                                  "---\n\n{participant_statements}\n\n---\n\n",
-            
-            "ranking_prediction": "Given this participant's statement, predict how this participant would rank these group statements from most preferred (1) to least preferred ({num_candidates}).\n\n\n\n"
-                                "# {question}\n\n"
-                                "## Participant's original statement: {participant_statement}\n\n"
-                                "## Group Statements to Rank:\n\n"
-                                "{candidate_statements}\n\n\n\n"
-                                """Based on the participant's original statement, predict their ranking of these group statements from most preferred to least preferred as a JSON object:\n\n{{\n  "ranking": [1, 2, etc.]\n}}\n\nImportant: Your response MUST contain ONLY a valid JSON object with a list of positive integer rankings under the key "ranking", NOT a list of statements, and must align with how this participant would rank them; e.g. how aligned they are with this participant's stance and priorities. Index starts at 1, not 0."""
+            "candidate_generation": """Your task is to synthesize a consensus statement from multiple individual opinions on a question. The statement should capture common ground and shared perspectives while respecting each person's viewpoint.
+
+The statement should be written in the voice of the group expressing their collective view (e.g., "We believe...", "Our position is..."), not as an outside description of what they think.
+
+Key requirements:
+- The statement must NOT conflict with any individual opinion
+- Identify key themes and points of agreement across the opinions
+- Include relevant details, concerns, and suggestions that appear across multiple opinions
+- Use natural language that reflects the tone and style of the original opinions
+- Write as the group, not about the group
+
+Process:
+1. Note recurring themes and shared values
+2. Identify areas of agreement and how different perspectives relate
+3. Synthesize a statement that represents this common ground
+4. Ensure no individual opinion is contradicted
+
+Example: If several opinions emphasize accessible public services while others focus on fiscal responsibility, a good synthesis might be "We support expanding public services while maintaining fiscal responsibility" rather than "There is consensus that services and budgets both matter."
+
+Question: {question}
+
+Individual Opinions:
+{participant_statements}
+
+You may include reasoning or notes before the final statement if helpful. Provide your response in this format:
+
+---REASONING---
+[Optional: Your analysis and reasoning process]
+
+---STATEMENT---
+[The actual consensus statement that will be used]""",
+
+            "ranking_prediction": """Predict how a person would rank these consensus statements based on their individual opinion. Consider how well each statement aligns with their stated values and priorities.
+
+Process:
+1. Identify the key values, priorities, and concerns in their opinion
+2. For each statement, assess alignment with those values
+3. Consider both what they explicitly support and what might concern them
+4. Rank from most to least aligned with their perspective
+
+Example: Someone emphasizing practical action would likely prefer statements with concrete steps over abstract principles, while someone focused on long-term values might rank differently.
+
+Question: {question}
+
+Participant's Opinion: {participant_statement}
+
+Statements to Rank:
+{candidate_statements}
+
+Predict their ranking from most preferred (1) to least preferred ({num_candidates}).
+
+You may include reasoning before the final ranking if helpful. Provide your response in this format:
+
+---REASONING---
+[Optional: Your analysis of how the participant would view each statement]
+
+---RANKING---
+{{
+  "ranking": [1, 2, 3, ...]
+}}
+
+The ranking array must contain integers 1 through {num_candidates}, ordered from most to least preferred."""
         }
         
         # Create templates that will be edited
@@ -1118,11 +1170,18 @@ class HabermasMachine:
                 
             # Log the response
             self.log_to_detailed(f"**Raw Response for Candidate {candidate_num}:**\n\n```\n{full_response}\n```\n\n")
-            
+
             # Remove the <think>...</think> tag that DeepSeek-R1 may add
             clean_response = re.sub(r'<think>.*?</think>', '', full_response, flags=re.DOTALL).strip()
-            
-            return clean_response
+
+            # Extract the statement from structured response (if using ---STATEMENT--- format)
+            # This handles models that include reasoning or chitchat
+            extracted_statement = self.extract_statement_from_response(clean_response)
+
+            if extracted_statement != clean_response:
+                self.log_to_detailed(f"**Extracted Statement (after removing reasoning):**\n\n```\n{extracted_statement}\n```\n\n")
+
+            return extracted_statement
             
         except Exception as e:
             error_msg = f"Error generating candidate {candidate_num}: {str(e)}"
@@ -1333,7 +1392,61 @@ class HabermasMachine:
         random_ranking = list(range(len(candidate_statements)))
         random.shuffle(random_ranking)
         return random_ranking, attempts_log
-    
+
+    def extract_statement_from_response(self, response):
+        """
+        Extract the consensus statement from a structured response.
+
+        Looks for content after ---STATEMENT--- marker. If not found,
+        falls back to using the entire response.
+        """
+        # Try to find ---STATEMENT--- section
+        match = re.search(r'---STATEMENT---\s*(.+)', response, re.DOTALL | re.IGNORECASE)
+
+        if match:
+            statement = match.group(1).strip()
+            # Remove any trailing markers or artifacts
+            statement = re.sub(r'\s*---\w+---.*$', '', statement, flags=re.DOTALL)
+            return statement
+
+        # Fallback: use entire response, but try to clean obvious reasoning sections
+        cleaned = re.sub(r'^---REASONING---.*?(?=---STATEMENT---|$)', '', response, flags=re.DOTALL | re.IGNORECASE)
+        return cleaned.strip()
+
+    def extract_ranking_from_response(self, response):
+        """
+        Extract the JSON ranking from a structured response.
+
+        Looks for content after ---RANKING--- marker first, then falls back
+        to searching the entire response for JSON.
+
+        Returns tuple of (ranking_dict, reasoning_text)
+        """
+        # Try to extract reasoning section
+        reasoning_match = re.search(r'---REASONING---\s*(.+?)(?=---RANKING---|$)', response, re.DOTALL | re.IGNORECASE)
+        reasoning = reasoning_match.group(1).strip() if reasoning_match else ""
+
+        # Try to find ---RANKING--- section
+        ranking_match = re.search(r'---RANKING---\s*(.+)', response, re.DOTALL | re.IGNORECASE)
+
+        if ranking_match:
+            json_text = ranking_match.group(1).strip()
+        else:
+            # Fallback: search entire response
+            json_text = response
+
+        # Extract JSON object from the text
+        json_match = re.search(r'\{[^}]*"ranking"[^}]*\}', json_text, re.DOTALL)
+
+        if json_match:
+            try:
+                ranking_dict = json.loads(json_match.group(0))
+                return ranking_dict, reasoning
+            except json.JSONDecodeError:
+                pass
+
+        return None, reasoning
+
     def create_ranking_system_prompt(self, num_candidates):
         """Create a system prompt that instructs the model to output JSON ranking"""
         # Generate a simple non-biasing example with a different number of candidates
